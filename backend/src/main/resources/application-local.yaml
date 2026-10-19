@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  servlet:
+    session:
+      cookie:
+        secure: false
+

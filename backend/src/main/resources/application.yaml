@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: sectio
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sectio}
+    username: ${DB_USER:sectio}
+    password: ${DB_PASSWORD:change-me}
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
+        same-site: lax
+
+server:
+  servlet:
+    context-path: /api/v1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
