@@ -1,9 +1,11 @@
 spring:
   application:
     name: sectio
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/sectio}
-    username: ${DB_USER:sectio}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sectio_db}
+    username: ${DB_USER:sectio_user}
     password: ${DB_PASSWORD:change-me}
   flyway:
     enabled: true
