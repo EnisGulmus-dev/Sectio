@@ -33,3 +33,10 @@ management:
     health:
       show-details: never
 
+app:
+  bootstrap:
+    admin:
+      name: ${ADMIN_BOOTSTRAP_NAME:}
+      email: ${ADMIN_BOOTSTRAP_EMAIL:}
+      password: ${ADMIN_BOOTSTRAP_PASSWORD:}
+
