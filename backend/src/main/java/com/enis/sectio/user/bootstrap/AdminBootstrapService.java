@@ -14,6 +14,8 @@ import java.util.Locale;
 @Service
 public class AdminBootstrapService {
 
+    static final int MINIMUM_BOOTSTRAP_PASSWORD_LENGTH = 12;
+
     private static final Logger log =
             LoggerFactory.getLogger(AdminBootstrapService.class);
 
@@ -82,6 +84,14 @@ public class AdminBootstrapService {
         if (password == null || password.isBlank()) {
             throw new IllegalStateException(
                     "ADMIN_BOOTSTRAP_PASSWORD must be configured when no admin exists"
+            );
+        }
+
+        if (password.length() < MINIMUM_BOOTSTRAP_PASSWORD_LENGTH) {
+            throw new IllegalStateException(
+                    "ADMIN_BOOTSTRAP_PASSWORD must contain at least "
+                            + MINIMUM_BOOTSTRAP_PASSWORD_LENGTH
+                            + " characters"
             );
         }
 
