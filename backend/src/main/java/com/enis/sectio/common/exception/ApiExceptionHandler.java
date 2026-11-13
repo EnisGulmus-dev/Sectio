@@ -5,6 +5,7 @@ import com.enis.sectio.auth.CurrentPasswordMismatchException;
 import com.enis.sectio.auth.PasswordReuseException;
 import com.enis.sectio.auth.PasswordPolicyViolationException;
 import com.enis.sectio.user.admin.UserManagementException;
+import com.enis.sectio.project.ProjectException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -91,6 +92,11 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> userManagementFailed(UserManagementException exception) {
         return ResponseEntity.status(exception.getStatus())
                 .body(new ApiErrorResponse(exception.getCode(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(ProjectException.class)
+    ResponseEntity<ApiErrorResponse> projectFailed(ProjectException exception) {
+        return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(exception.getCode(), exception.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

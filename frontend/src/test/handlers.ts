@@ -14,6 +14,10 @@ export const initialUsers = [
 ];
 
 export const handlers = [
+  http.get("*/api/v1/projects*", () => HttpResponse.json({
+    content: [{ id: 10, ownerId: 1, ownerName: "Sectio Admin", name: "Web Projesi", description: "İlk proje", archived: false, createdAt: "2026-11-13T10:00:00Z", updatedAt: "2026-11-13T10:00:00Z" }],
+    page: 0, size: 20, totalElements: 1, totalPages: 1, first: true, last: true,
+  })),
   http.get("*/api/v1/auth/csrf", () =>
     HttpResponse.json({
       headerName: "X-XSRF-TOKEN",

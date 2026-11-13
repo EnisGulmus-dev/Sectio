@@ -28,8 +28,8 @@ export function AppLayout() {
               Kullanıcılar
             </NavLink>
           )}
-          <span className="nav-item disabled">Projeler <small>Sırada</small></span>
-          <span className="nav-item disabled">Görevler <small>Sırada</small></span>
+          <NavLink className={({ isActive }) => `nav-item${isActive ? " active" : ""}`} to="/projects">Projeler</NavLink>
+          <NavLink className={({ isActive }) => `nav-item${isActive ? " active" : ""}`} to="/my-tasks">Görevlerim</NavLink>
         </nav>
 
         <div className="sidebar-user">

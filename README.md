@@ -173,3 +173,6 @@ npm run check
 Frontend testlerinde Vitest, React Testing Library, user-event, jsdom ve MSW
 kullanılır. Genel proje ve klasör düzeni `docs/architecture.md` dosyasında
 açıklanmıştır.
+
+Proje, üyelik, görev ve dashboard özelliklerinin endpoint ve manuel kontrol
+adımları `docs/feature-testing.md` dosyasında açıklanmıştır.
