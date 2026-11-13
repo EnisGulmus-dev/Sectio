@@ -1,6 +1,9 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { isApiClientError } from "../../../shared/api/apiError";
+import { ConfirmDialog } from "../../../shared/ui/ConfirmDialog";
+import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedback";
+import { useToast } from "../../../shared/ui/ToastProvider";
 import type { UserRole } from "../../auth/types";
 import { usersApi } from "../api/usersApi";
 import type { CreateUserInput, ManagedUser } from "../types";
@@ -24,12 +27,13 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateUserInput>(emptyForm);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
   const [resetting, setResetting] = useState<ManagedUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
+  const { showToast } = useToast();
 
   async function loadUsers() {
     setLoading(true);
@@ -62,13 +66,12 @@ export function UsersPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    setNotice(null);
     try {
       const created = await usersApi.create(form);
       setUsers((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name, "tr")));
       setForm(emptyForm);
       setShowCreate(false);
-      setNotice(`${created.name} oluşturuldu. İlk girişte parolasını değiştirmesi gerekecek.`);
+      showToast(`${created.name} oluşturuldu. İlk girişte parolasını değiştirmesi gerekecek.`);
     } catch (requestError) {
       setError(errorMessage(requestError));
     }
@@ -86,7 +89,7 @@ export function UsersPage() {
       });
       replaceUser(updated);
       setEditing(null);
-      setNotice("Kullanıcı bilgileri güncellendi.");
+      showToast("Kullanıcı bilgileri güncellendi.");
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -97,11 +100,11 @@ export function UsersPage() {
   async function handleStatus(user: ManagedUser) {
     setBusyId(user.id);
     setError(null);
-    setNotice(null);
     try {
       const updated = await usersApi.changeStatus(user.id, !user.active);
       replaceUser(updated);
-      setNotice(`${updated.name} ${updated.active ? "aktifleştirildi" : "pasifleştirildi"}.`);
+      showToast(`${updated.name} ${updated.active ? "aktifleştirildi" : "pasifleştirildi"}.`);
+      setStatusTarget(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -119,7 +122,7 @@ export function UsersPage() {
       replaceUser(updated);
       setResetting(null);
       setTemporaryPassword("");
-      setNotice(`${updated.name} için geçici parola kaydedildi.`);
+      showToast(`${updated.name} için geçici parola kaydedildi.`);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -140,8 +143,7 @@ export function UsersPage() {
         </button>
       </header>
 
-      {error && <div className="form-alert" role="alert">{error}</div>}
-      {notice && <div className="notice" role="status">{notice}</div>}
+      {error && <InlineAlert message={error} />}
 
       {showCreate && (
         <section className="panel">
@@ -183,7 +185,7 @@ export function UsersPage() {
           <span>{filteredUsers.length} kayıt</span>
         </div>
 
-        {loading ? <p className="empty-state">Kullanıcılar yükleniyor…</p> : filteredUsers.length === 0 ? <p className="empty-state">Eşleşen kullanıcı bulunamadı.</p> : (
+        {loading ? <LoadingState label="Kullanıcılar yükleniyor…" /> : filteredUsers.length === 0 ? <EmptyState title="Eşleşen kullanıcı bulunamadı" description="Arama ifadenizi değiştirip yeniden deneyin." /> : (
           <div className="table-scroll">
             <table>
               <thead><tr><th>Kullanıcı</th><th>Rol</th><th>Durum</th><th>Parola</th><th><span className="sr-only">İşlemler</span></th></tr></thead>
@@ -193,13 +195,23 @@ export function UsersPage() {
                   <td>{user.role === "ADMIN" ? "Yönetici" : "Çalışan"}</td>
                   <td><span className={`status-label ${user.active ? "active" : "inactive"}`}>{user.active ? "Aktif" : "Pasif"}</span></td>
                   <td>{user.mustChangePassword ? "Değişiklik bekliyor" : "Güncel"}</td>
-                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => void handleStatus(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button></div></td>
+                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button></div></td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={statusTarget !== null}
+        title={statusTarget?.active ? "Kullanıcı pasifleştirilsin mi?" : "Kullanıcı aktifleştirilsin mi?"}
+        description={statusTarget ? `${statusTarget.name} hesabının erişim durumu değiştirilecek.` : ""}
+        confirmLabel={statusTarget?.active ? "Pasifleştir" : "Aktifleştir"}
+        busy={statusTarget ? busyId === statusTarget.id : false}
+        onCancel={() => setStatusTarget(null)}
+        onConfirm={() => statusTarget && void handleStatus(statusTarget)}
+      />
     </div>
   );
 }

@@ -7,6 +7,8 @@ import com.enis.sectio.auth.PasswordPolicyViolationException;
 import com.enis.sectio.user.admin.UserManagementException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -89,5 +91,23 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> userManagementFailed(UserManagementException exception) {
         return ResponseEntity.status(exception.getStatus())
                 .body(new ApiErrorResponse(exception.getCode(), exception.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiErrorResponse> unreadableRequest() {
+        return ResponseEntity.badRequest()
+                .body(new ApiErrorResponse(
+                        "INVALID_REQUEST",
+                        "Request body is missing or malformed"
+                ));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ApiErrorResponse> dataConflict() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        "DATA_CONFLICT",
+                        "The operation conflicts with existing data"
+                ));
     }
 }

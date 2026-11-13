@@ -20,6 +20,19 @@ IntelliJ IDEA'da aşağıdaki iki ayar JDK 21 olmalıdır:
 - `Settings > Build, Execution, Deployment > Build Tools > Maven > Runner > JRE`:
   `Use Project JDK (21)`
 
+## Node standardı
+
+Frontend geliştirme ve birleşik Maven derlemesi **Node.js 24** ve **npm 11**
+kullanır. Kök dizindeki `.nvmrc` dosyası doğrulanan yerel sürümü sabitler.
+
+```powershell
+node --version
+npm --version
+```
+
+Beklenen ana sürümler `v24` ve `11`'dir. Maven başlangıcında `npm install`
+idempotent olarak çalışır; ardından frontend test/build adımları kullanılabilir.
+
 ## Backend - yerel geliştirme
 
 Yerel PostgreSQL veritabanını başlatın ve `.env.example` dosyasını `.env` olarak
@@ -144,3 +157,19 @@ Otomatik kontrolleri çalıştırmak için:
 cd backend
 .\mvnw.cmd test
 ```
+
+Bu tek komut frontend bağımlılık kontrolü, frontend testleri, frontend production
+build'i ve backend testlerini birlikte çalıştırır.
+
+Frontend kontrollerini ayrı çalıştırmak için:
+
+```powershell
+cd frontend
+npm run test
+npm run test:watch
+npm run check
+```
+
+Frontend testlerinde Vitest, React Testing Library, user-event, jsdom ve MSW
+kullanılır. Genel proje ve klasör düzeni `docs/architecture.md` dosyasında
+açıklanmıştır.

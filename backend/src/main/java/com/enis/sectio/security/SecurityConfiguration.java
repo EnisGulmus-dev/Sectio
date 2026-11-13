@@ -40,21 +40,13 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/login",
-                                "/change-password",
-                                "/users",
-                                "/assets/**",
-                                "/favicon.ico"
-                        ).permitAll()
-                        .requestMatchers(
                                 "/api/v1/auth/csrf",
                                 "/api/v1/auth/login"
                         ).permitAll()
                         .requestMatchers("/api/v1/admin/**")
                         .hasRole(Role.ADMIN.name())
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().permitAll()
                 )
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
