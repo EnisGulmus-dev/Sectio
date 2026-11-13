@@ -117,6 +117,11 @@ public class User {
         this.mustChangePassword = false;
     }
 
+    public void resetPasswordHash(String passwordHash) {
+        this.passwordHash = requireNonBlank(passwordHash, "passwordHash");
+        this.mustChangePassword = true;
+    }
+
     public void changeRole(Role role) {
         this.role = Objects.requireNonNull(role, "role must not be null");
     }

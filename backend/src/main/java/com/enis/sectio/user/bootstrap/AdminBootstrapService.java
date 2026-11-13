@@ -95,6 +95,12 @@ public class AdminBootstrapService {
             );
         }
 
+        if (password.length() > 72) {
+            throw new IllegalStateException(
+                    "ADMIN_BOOTSTRAP_PASSWORD must not exceed 72 characters"
+            );
+        }
+
         return password;
     }
 }
