@@ -6,6 +6,7 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel?: string;
   busy?: boolean;
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = "Onayla",
   busy = false,
+  tone = "danger",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -34,7 +36,7 @@ export function ConfirmDialog({
       <p>{description}</p>
       <div className="button-row">
         <button className="secondary-button" type="button" onClick={onCancel}>Vazgeç</button>
-        <button className="danger-button" disabled={busy} type="button" onClick={onConfirm}>
+        <button className={tone === "danger" ? "danger-button" : "primary-button compact-button"} disabled={busy} type="button" onClick={onConfirm}>
           {busy ? "İşleniyor…" : confirmLabel}
         </button>
       </div>

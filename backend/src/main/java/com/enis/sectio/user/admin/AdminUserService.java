@@ -1,8 +1,12 @@
 package com.enis.sectio.user.admin;
 
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
+import com.enis.sectio.project.ProjectRepository;
+import com.enis.sectio.project.ProjectMemberRepository;
+import com.enis.sectio.task.TaskRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,10 +21,19 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ProjectRepository projectRepository;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final TaskRepository taskRepository;
 
-    public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                            ProjectRepository projectRepository,
+                            ProjectMemberRepository projectMemberRepository,
+                            TaskRepository taskRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.projectRepository = projectRepository;
+        this.projectMemberRepository = projectMemberRepository;
+        this.taskRepository = taskRepository;
     }
 
     @Transactional(readOnly = true)
@@ -32,7 +45,7 @@ public class AdminUserService {
     }
 
     @Transactional
-    public AdminUserResponse createUser(String name, String email, String password, Role role) {
+    public AdminUserResponse createUser(String name, String email, String password, Role role, JobTitle jobTitle) {
         String normalizedEmail = normalizeEmail(email);
         validatePassword(password);
 
@@ -41,6 +54,7 @@ public class AdminUserService {
         }
 
         User user = new User(name, normalizedEmail, passwordEncoder.encode(password), role);
+        user.changeJobTitle(jobTitle);
         return AdminUserResponse.from(userRepository.save(user));
     }
 
@@ -49,6 +63,7 @@ public class AdminUserService {
             Long userId,
             String name,
             Role role,
+            JobTitle jobTitle,
             String currentAdminEmail) {
         User user = findUser(userId);
         boolean currentUser = user.getEmail().equals(normalizeEmail(currentAdminEmail));
@@ -66,6 +81,7 @@ public class AdminUserService {
 
         user.setName(name);
         user.changeRole(role);
+        user.changeJobTitle(jobTitle);
         return AdminUserResponse.from(user);
     }
 
@@ -112,6 +128,24 @@ public class AdminUserService {
         validatePassword(temporaryPassword);
         user.resetPasswordHash(passwordEncoder.encode(temporaryPassword));
         return AdminUserResponse.from(user);
+    }
+
+    @Transactional
+    public void deleteUser(Long userId, String currentAdminEmail) {
+        User user = findUser(userId);
+        if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
+            throw conflict("SELF_DELETION_NOT_ALLOWED", "You cannot delete your own account");
+        }
+        if (user.isActive()) {
+            throw conflict("ACTIVE_USER_DELETION_NOT_ALLOWED", "Deactivate the user before permanent deletion");
+        }
+        if (projectRepository.existsByOwnerId(userId)
+                || projectMemberRepository.existsByUserId(userId)
+                || taskRepository.existsByCreatedById(userId)
+                || taskRepository.existsByAssigneeId(userId)) {
+            throw conflict("USER_HAS_RELATED_DATA", "User with project or task history cannot be permanently deleted");
+        }
+        userRepository.delete(user);
     }
 
     private User findUser(Long userId) {

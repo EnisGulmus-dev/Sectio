@@ -1,10 +1,12 @@
 export type UserRole = "ADMIN" | "EMPLOYEE";
+export type JobTitle = "EMPLOYEE" | "TEAM_LEADER" | "MANAGER";
 
 export type CurrentUser = {
   id: number;
   name: string;
   email: string;
   role: UserRole;
+  jobTitle: JobTitle;
   mustChangePassword: boolean;
 };
 

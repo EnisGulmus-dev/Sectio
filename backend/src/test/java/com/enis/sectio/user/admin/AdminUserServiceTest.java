@@ -1,8 +1,12 @@
 package com.enis.sectio.user.admin;
 
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
+import com.enis.sectio.project.ProjectRepository;
+import com.enis.sectio.project.ProjectMemberRepository;
+import com.enis.sectio.task.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,11 +31,15 @@ class AdminUserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock private ProjectRepository projectRepository;
+    @Mock private ProjectMemberRepository projectMemberRepository;
+    @Mock private TaskRepository taskRepository;
+
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminUserService(userRepository, passwordEncoder);
+        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository);
     }
 
     @Test
@@ -45,7 +53,8 @@ class AdminUserServiceTest {
                 "  New Employee  ",
                 " Employee@Sectio.Local ",
                 "temporary-123",
-                Role.EMPLOYEE
+                Role.EMPLOYEE,
+                JobTitle.TEAM_LEADER
         );
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
@@ -55,6 +64,7 @@ class AdminUserServiceTest {
         assertThat(saved.getName()).isEqualTo("New Employee");
         assertThat(saved.getEmail()).isEqualTo("employee@sectio.local");
         assertThat(saved.getPasswordHash()).isEqualTo("encoded-password");
+        assertThat(saved.getJobTitle()).isEqualTo(JobTitle.TEAM_LEADER);
         assertThat(response.mustChangePassword()).isTrue();
     }
 
@@ -79,6 +89,7 @@ class AdminUserServiceTest {
                 1L,
                 "Admin",
                 Role.EMPLOYEE,
+                JobTitle.EMPLOYEE,
                 "another-admin@sectio.local"
         ))
                 .isInstanceOf(UserManagementException.class)
@@ -101,6 +112,41 @@ class AdminUserServiceTest {
 
         assertThat(employee.getPasswordHash()).isEqualTo("new-hash");
         assertThat(response.mustChangePassword()).isTrue();
+    }
+
+    @Test
+    void deletesInactiveUserWithoutRelatedData() {
+        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
+        employee.deactivate();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+
+        service.deleteUser(2L, "admin@sectio.local");
+
+        verify(userRepository).delete(employee);
+    }
+
+    @Test
+    void activeUserMustBeDeactivatedBeforeDeletion() {
+        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+
+        assertThatThrownBy(() -> service.deleteUser(2L, "admin@sectio.local"))
+                .isInstanceOf(UserManagementException.class)
+                .extracting(exception -> ((UserManagementException) exception).getCode())
+                .isEqualTo("ACTIVE_USER_DELETION_NOT_ALLOWED");
+    }
+
+    @Test
+    void userWithProjectOrTaskHistoryCannotBeDeleted() {
+        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
+        employee.deactivate();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(projectMemberRepository.existsByUserId(2L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteUser(2L, "admin@sectio.local"))
+                .isInstanceOf(UserManagementException.class)
+                .extracting(exception -> ((UserManagementException) exception).getCode())
+                .isEqualTo("USER_HAS_RELATED_DATA");
     }
 
     private static User user(String name, String email, Role role) {

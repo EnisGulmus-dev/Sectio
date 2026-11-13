@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ProjectRepository extends JpaRepository<Project, Long> {
+    boolean existsByOwnerId(Long ownerId);
+
     @Query("""
         select distinct p from Project p left join ProjectMember pm on pm.project = p
         where (:admin = true or p.owner.email = :email or pm.user.email = :email)

@@ -1,6 +1,7 @@
 package com.enis.sectio.user.admin;
 
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 
 import java.time.Instant;
@@ -10,6 +11,7 @@ public record AdminUserResponse(
         String name,
         String email,
         Role role,
+        JobTitle jobTitle,
         boolean active,
         boolean mustChangePassword,
         Instant createdAt,
@@ -21,6 +23,7 @@ public record AdminUserResponse(
                 user.getName(),
                 user.getEmail(),
                 user.getRole(),
+                user.getJobTitle(),
                 user.isActive(),
                 user.isMustChangePassword(),
                 user.getCreatedAt(),

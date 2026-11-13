@@ -18,6 +18,7 @@ describe("RequireAdminRoute", () => {
         name: "Employee",
         email: "employee@sectio.local",
         role: "EMPLOYEE",
+      jobTitle: "EMPLOYEE",
         mustChangePassword: false,
       },
       startupError: null,
@@ -52,6 +53,7 @@ describe("RequireAdminRoute", () => {
         name: "Admin",
         email: "admin@sectio.local",
         role: "ADMIN",
+      jobTitle: "MANAGER",
         mustChangePassword: false,
       },
     });

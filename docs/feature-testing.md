@@ -3,6 +3,16 @@
 Start the integrated application with `backend\.\mvnw.cmd spring-boot:run`, sign in,
 and use the URLs below.
 
+## Users
+
+- UI: `/users`
+- API: `DELETE /api/v1/admin/users/{userId}`
+
+Deactivate a user and verify that the **Sil** action appears. An unused inactive
+user can be permanently deleted after confirmation. Active users, the current
+admin, and users referenced by a project, membership or task must be rejected so
+project history and foreign-key integrity remain intact.
+
 ## Projects
 
 - UI: `/projects`, `/projects/{id}`
@@ -13,15 +23,33 @@ Verify that an admin can create and archive a project. A project owner is added
 as its first member automatically. An archived project remains visible with the
 archive filter and rejects further edits.
 
+With the archive filter enabled, restore an archived project and verify that it
+returns to the active list. Verify that both active and archived projects expose
+permanent deletion and that deleting one also removes its tasks and memberships.
+
+Create users with `EMPLOYEE`, `TEAM_LEADER` and `MANAGER` job titles. An admin,
+team leader or manager can create a project; a regular employee cannot. These
+job titles are separate from the `ADMIN`/`EMPLOYEE` security role.
+
 ## Project members
 
 - API: `GET/POST /api/v1/projects/{id}/members`
 - API: `GET /api/v1/projects/{id}/member-candidates`
 - API: `DELETE /api/v1/projects/{id}/members/{userId}`
 
-Add an active user from the project detail page. Duplicate and inactive users
+Select multiple active users from the project detail page and add them in one
+operation. Duplicate and inactive users
 must be rejected. The owner cannot be removed. An employee who is neither owner
 nor member must receive `403` for project access.
+
+Focus the member search field and verify that eligible active users appear in a
+dropdown. Search by name or email and select multiple results. Click outside the
+picker and verify that the dropdown closes without clearing selected users. The
+project owner must remain first in the member list.
+
+Assign an active TODO or IN_PROGRESS task to a member and verify that member
+removal returns a conflict. Change every assigned task to DONE or CANCELLED and
+verify that the member can then be removed.
 
 ## Tasks
 
@@ -31,8 +59,14 @@ nor member must receive `403` for project access.
 - Personal list: `GET /api/v1/tasks/my`, UI `/my-tasks`
 
 Create a task from a project detail page, assign an active member and change its
-status from TODO to IN_PROGRESS and DONE. DONE sets `completedAt`; moving away
+status from TODO to IN_PROGRESS, DONE and CANCELLED. DONE sets `completedAt`; moving away
 from DONE clears it. A non-member or inactive assignee must be rejected.
+
+Use the task toolbar to filter by title, status, priority and assignee. Edit a
+task and verify the title, assignee, priority, description and due date are
+updated. Deletion and project archiving must require confirmation. On
+`/my-tasks`, verify that filters, pagination and status updates work without
+opening the project first.
 
 ## Dashboard
 
@@ -44,3 +78,6 @@ Admins see system-wide totals; employees only see tasks assigned to themselves.
 Run `backend\.\mvnw.cmd test`. This executes frontend dependency verification,
 the production frontend build, JUnit tests, and Vitest/MSW tests. Docker-backed
 Testcontainers tests are skipped when Docker is unavailable.
+The web authorization integration suite still runs without Docker and covers
+anonymous access, CSRF, owner/member/admin boundaries, invalid assignment and
+archived-project mutation rules. See `docs/api/authorization-matrix.md`.

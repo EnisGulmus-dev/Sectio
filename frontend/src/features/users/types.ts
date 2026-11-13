@@ -1,10 +1,11 @@
-import type { UserRole } from "../auth/types";
+import type { JobTitle, UserRole } from "../auth/types";
 
 export type ManagedUser = {
   id: number;
   name: string;
   email: string;
   role: UserRole;
+  jobTitle: JobTitle;
   active: boolean;
   mustChangePassword: boolean;
   createdAt: string;
@@ -16,4 +17,5 @@ export type CreateUserInput = {
   email: string;
   temporaryPassword: string;
   role: UserRole;
+  jobTitle: JobTitle;
 };

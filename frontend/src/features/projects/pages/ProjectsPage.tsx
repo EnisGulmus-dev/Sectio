@@ -3,10 +3,14 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../../auth/useAuth";
 import { isApiClientError } from "../../../shared/api/apiError";
+import { ConfirmDialog } from "../../../shared/ui/ConfirmDialog";
 import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedback";
 import { useToast } from "../../../shared/ui/ToastProvider";
 import { projectsApi } from "../api/projectsApi";
+import { formatDate } from "../projectFormat";
 import type { Project } from "../types";
+
+type ProjectAction = { type: "archive" | "restore" | "delete"; project: Project } | null;
 
 export function ProjectsPage() {
   const [items, setItems] = useState<Project[]>([]);
@@ -18,8 +22,11 @@ export function ProjectsPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [form, setForm] = useState({ name: "", description: "" });
+  const [projectAction, setProjectAction] = useState<ProjectAction>(null);
+  const [busy, setBusy] = useState(false);
   const { user } = useAuth();
   const { showToast } = useToast();
+  const canCreateProject = user?.role === "ADMIN" || user?.jobTitle === "TEAM_LEADER" || user?.jobTitle === "MANAGER";
 
   async function load(targetPage = page) {
     setLoading(true);
@@ -37,6 +44,7 @@ export function ProjectsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    setBusy(true);
     try {
       await projectsApi.create(form);
       setForm({ name: "", description: "" });
@@ -44,21 +52,41 @@ export function ProjectsPage() {
       await load(0);
       showToast("Proje oluşturuldu");
     } catch (caught) { setError(isApiClientError(caught) ? caught.message : "Proje oluşturulamadı"); }
+    finally { setBusy(false); }
   }
 
-  async function archive(project: Project) {
+  async function confirmProjectAction() {
+    if (!projectAction) return;
+    setBusy(true);
     try {
-      await projectsApi.archive(project.id);
+      if (projectAction.type === "archive") {
+        await projectsApi.archive(projectAction.project.id);
+        showToast("Proje arşivlendi");
+      } else if (projectAction.type === "restore") {
+        await projectsApi.restore(projectAction.project.id);
+        showToast("Proje geri yüklendi");
+      } else {
+        await projectsApi.deleteProject(projectAction.project.id);
+        showToast("Proje kalıcı olarak silindi");
+      }
+      setProjectAction(null);
       await load(page);
-      showToast("Proje arşivlendi");
-    } catch (caught) { setError(isApiClientError(caught) ? caught.message : "Proje arşivlenemedi"); }
+    } catch (caught) { setError(isApiClientError(caught) ? caught.message : "Proje işlemi tamamlanamadı"); }
+    finally { setBusy(false); }
   }
+
+  const actionCopy = projectAction?.type === "restore"
+    ? { title: "Proje geri yüklensin mi?", description: `“${projectAction.project.name}” yeniden aktif olacak ve düzenlenebilecek.`, label: "Projeyi geri yükle" }
+    : projectAction?.type === "delete"
+      ? { title: "Proje kalıcı olarak silinsin mi?", description: `“${projectAction.project.name}” ile birlikte üyelikler ve görevler geri alınamayacak şekilde silinecek.`, label: "Kalıcı olarak sil" }
+      : { title: "Proje arşivlensin mi?", description: `“${projectAction?.project.name ?? "Seçilen proje"}” salt okunur hale gelecek; görev ve üye değişiklikleri durdurulacak.`, label: "Projeyi arşivle" };
 
   return <div className="page-stack">
-    <header className="page-header"><div><p className="eyebrow">Çalışma alanı</p><h1>Projeler</h1><p>Projeleri, üyeleri ve görevleri tek yerden yönetin.</p></div><button className="primary-button compact-button" onClick={() => setShowForm(!showForm)}>Yeni proje</button></header>
+    <header className="page-header"><div><p className="eyebrow">Çalışma alanı</p><h1>Projeler</h1><p>Projeleri, üyeleri ve görevleri tek yerden yönetin.</p></div>{canCreateProject && <button className="primary-button compact-button" aria-expanded={showForm} onClick={() => setShowForm(!showForm)}>{showForm ? "Formu kapat" : "Yeni proje"}</button>}</header>
     {error && <InlineAlert message={error} />}
-    <div className="filter-row"><input aria-label="Proje ara" placeholder="Proje ara" value={query} onChange={(event) => setQuery(event.target.value)} /><button className="secondary-button" onClick={() => void load(0)}>Ara</button><label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Arşivlenenler</label></div>
-    {showForm && <form className="panel management-form" onSubmit={create}><label>Proje adı<input required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Açıklama<input maxLength={1000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><button className="primary-button compact-button">Oluştur</button></form>}
-    {loading ? <LoadingState /> : items.length === 0 ? <EmptyState title="Proje bulunamadı" description="Yeni proje oluşturarak başlayın." /> : <><div className="project-grid">{items.map((project) => <article className="panel project-card" key={project.id}><div><span className="status-label active">{project.archived ? "Arşiv" : "Aktif"}</span><h2>{project.name}</h2><p>{project.description || "Açıklama yok"}</p><small>Sahip: {project.ownerName}</small></div><div className="button-row"><Link className="primary-link" to={`/projects/${project.id}`}>Aç</Link>{!project.archived && (user?.role === "ADMIN" || user?.id === project.ownerId) && <button className="secondary-button" onClick={() => void archive(project)}>Arşivle</button>}</div></article>)}</div>{totalPages > 1 && <nav className="pagination" aria-label="Proje sayfaları"><button className="secondary-button" disabled={page === 0} onClick={() => void load(page - 1)}>Önceki</button><span>{page + 1} / {totalPages}</span><button className="secondary-button" disabled={page + 1 >= totalPages} onClick={() => void load(page + 1)}>Sonraki</button></nav>}</>}
+    <form className="filter-row" onSubmit={(event) => { event.preventDefault(); void load(0); }}><input aria-label="Proje ara" placeholder="Proje adıyla ara" value={query} onChange={(event) => setQuery(event.target.value)} /><button className="secondary-button">Ara</button><label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Arşivlenenleri göster</label></form>
+    {showForm && canCreateProject && <form className="panel management-form" onSubmit={create}><div className="section-heading full-field"><div><h2>Yeni proje</h2><p>Proje sahibi olarak otomatik biçimde üye listesine eklenirsiniz.</p></div></div><label>Proje adı<input autoFocus required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label className="full-field">Açıklama<textarea rows={3} maxLength={1000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><button className="primary-button compact-button" disabled={busy}>{busy ? "Oluşturuluyor…" : "Oluştur"}</button></form>}
+    {loading ? <LoadingState /> : items.length === 0 ? <EmptyState title="Proje bulunamadı" description={query ? "Arama ifadenizi değiştirip yeniden deneyin." : "Yeni proje oluşturarak başlayın."} /> : <><div className="project-grid">{items.map((project) => { const canManage = user?.role === "ADMIN" || user?.id === project.ownerId; return <article className="panel project-card" key={project.id}><div><div className="task-card-top"><span className={`status-label ${project.archived ? "inactive" : "active"}`}>{project.archived ? "Arşiv" : "Aktif"}</span><small>{formatDate(project.updatedAt)}</small></div><h2>{project.name}</h2><p>{project.description || "Bu proje için açıklama eklenmedi."}</p><small>Sahip: {project.ownerName}</small></div><div className="button-row project-actions"><Link className="primary-link" to={`/projects/${project.id}`}>Projeyi aç</Link>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setProjectAction({ type: "archive", project })}>Arşivle</button>}{canManage && project.archived && <button className="secondary-button" type="button" onClick={() => setProjectAction({ type: "restore", project })}>Geri yükle</button>}{canManage && <button className="text-button" type="button" onClick={() => setProjectAction({ type: "delete", project })}>Kalıcı sil</button>}</div></article>; })}</div>{totalPages > 1 && <nav className="pagination" aria-label="Proje sayfaları"><button className="secondary-button" disabled={page === 0} onClick={() => void load(page - 1)}>Önceki</button><span>{page + 1} / {totalPages}</span><button className="secondary-button" disabled={page + 1 >= totalPages} onClick={() => void load(page + 1)}>Sonraki</button></nav>}</>}
+    <ConfirmDialog open={!!projectAction} title={actionCopy.title} description={actionCopy.description} confirmLabel={actionCopy.label} tone={projectAction?.type === "restore" ? "primary" : "danger"} busy={busy} onConfirm={() => void confirmProjectAction()} onCancel={() => setProjectAction(null)} />
   </div>;
 }

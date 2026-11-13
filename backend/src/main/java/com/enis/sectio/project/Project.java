@@ -20,6 +20,7 @@ public class Project {
     @PreUpdate void updateTimestamp() { updatedAt = Instant.now(); }
     public void update(String name, String description) { this.name = name.trim(); this.description = description == null || description.isBlank() ? null : description.trim(); }
     public void archive() { archivedAt = Instant.now(); }
+    public void restore() { archivedAt = null; }
     public Long getId() { return id; } public User getOwner() { return owner; } public String getName() { return name; }
     public String getDescription() { return description; } public Instant getArchivedAt() { return archivedAt; }
     public Instant getCreatedAt() { return createdAt; } public Instant getUpdatedAt() { return updatedAt; }

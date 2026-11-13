@@ -16,10 +16,12 @@ public class ProjectController {
     @PostMapping @ResponseStatus(HttpStatus.CREATED) ProjectResponse create(@Valid @RequestBody ProjectInput r, Authentication a) { return service.create(a.getName(), r.name(), r.description()); }
     @PatchMapping("/{id}") ProjectResponse update(@PathVariable Long id, @Valid @RequestBody ProjectInput r, Authentication a) { return service.update(id, a.getName(), r.name(), r.description()); }
     @PostMapping("/{id}/archive") ProjectResponse archive(@PathVariable Long id, Authentication a) { return service.archive(id, a.getName()); }
+    @PostMapping("/{id}/restore") ProjectResponse restore(@PathVariable Long id, Authentication a) { return service.restore(id, a.getName()); }
+    @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) void delete(@PathVariable Long id, Authentication a) { service.delete(id, a.getName()); }
     @GetMapping("/{id}/members") List<ProjectMemberResponse> members(@PathVariable Long id, Authentication a) { return service.listMembers(id, a.getName()); }
     @GetMapping("/{id}/member-candidates") List<ProjectMemberCandidateResponse> memberCandidates(@PathVariable Long id, Authentication a) { return service.memberCandidates(id, a.getName()); }
-    @PostMapping("/{id}/members") @ResponseStatus(HttpStatus.CREATED) ProjectMemberResponse addMember(@PathVariable Long id, @Valid @RequestBody MemberInput r, Authentication a) { return service.addMember(id, r.userId(), a.getName()); }
+    @PostMapping("/{id}/members") @ResponseStatus(HttpStatus.CREATED) List<ProjectMemberResponse> addMembers(@PathVariable Long id, @Valid @RequestBody MemberInput r, Authentication a) { return service.addMembers(id, r.userIds(), a.getName()); }
     @DeleteMapping("/{id}/members/{userId}") @ResponseStatus(HttpStatus.NO_CONTENT) void removeMember(@PathVariable Long id, @PathVariable Long userId, Authentication a) { service.removeMember(id, userId, a.getName()); }
     public record ProjectInput(@NotBlank @Size(max=150) String name, @Size(max=1000) String description) {}
-    public record MemberInput(@NotNull @Positive Long userId) {}
+    public record MemberInput(@NotEmpty @Size(max=50) List<@NotNull @Positive Long> userIds) {}
 }

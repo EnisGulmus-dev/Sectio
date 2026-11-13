@@ -2,7 +2,7 @@
 openapi: 3.1.0
 info:
   title: Sectio API
-  version: 0.1.0
+  version: 0.2.0
   description: Session-based API for the Sectio task management application.
 servers:
   - url: http://localhost:8080
@@ -200,6 +200,24 @@ paths:
           description: User not found
         "409":
           description: Self-role or last-admin protection rejected the request
+    delete:
+      tags: [Admin Users]
+      summary: Permanently delete an inactive user
+      description: Self-deletion is forbidden. Users with project ownership, membership or task history are retained for referential integrity and audit history.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204":
+          description: User permanently deleted
+        "403":
+          $ref: "#/components/responses/AccessDenied"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: User is active, is the current admin, or has related project/task data
 
   /api/v1/admin/users/{userId}/status:
     patch:
@@ -258,123 +276,342 @@ paths:
       tags: [Projects]
       summary: List accessible projects
       security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/Archived"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        "200": {description: Paginated projects}
+        "200":
+          description: Projects visible to the current user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectPage"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
     post:
       tags: [Projects]
       summary: Create a project
+      description: Available to administrators and employees whose job title is TEAM_LEADER or MANAGER.
       security: [{sessionCookie: []}]
       parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProjectInput"}
       responses:
-        "201": {description: Project created}
+        "201":
+          description: Project created; creator is owner and first member
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Project"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
   /api/v1/projects/{projectId}:
     get:
       tags: [Projects]
       summary: Get an accessible project
       security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/ProjectId"}]
       responses:
-        "200": {description: Project detail}
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Project"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
     patch:
       tags: [Projects]
       summary: Update a project
+      description: Only an administrator or the project owner can update an active project.
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProjectInput"}
       responses:
-        "200": {description: Project updated}
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Project"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+    delete:
+      tags: [Projects]
+      summary: Permanently delete a project
+      description: Deletes an active or archived project together with its tasks and memberships. This operation cannot be undone.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Project permanently deleted}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/projects/{projectId}/archive:
     post:
       tags: [Projects]
       summary: Archive a project
+      description: Archived projects remain readable but reject project, member and task mutations.
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
       responses:
-        "200": {description: Project archived}
+        "200":
+          description: Project archived
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Project"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/projects/{projectId}/restore:
+    post:
+      tags: [Projects]
+      summary: Restore an archived project
+      description: Only an administrator or the project owner can restore a project.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "200":
+          description: Project restored and active again
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Project"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/projects/{projectId}/members:
     get:
       tags: [Projects]
       summary: List project members
       security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/ProjectId"}]
       responses:
-        "200": {description: Project members}
+        "200":
+          description: Project members with the project owner pinned first, followed by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ProjectMember"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
     post:
       tags: [Projects]
-      summary: Add a project member
+      summary: Add project members
+      description: Only an administrator or the project owner can add up to 50 active users atomically.
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AddProjectMemberRequest"}
       responses:
-        "201": {description: Member added}
+        "201":
+          description: Members added
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ProjectMember"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/projects/{projectId}/members/{userId}:
     delete:
       tags: [Projects]
       summary: Remove a project member
+      description: The project owner cannot be removed. An assignee can be removed only when all assigned tasks are DONE or CANCELLED.
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfHeader"
       responses:
         "204": {description: Member removed}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/projects/{projectId}/member-candidates:
     get:
       tags: [Projects]
       summary: List active users who can be added to a project
       security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/ProjectId"}]
       responses:
-        "200": {description: Candidate users}
+        "200":
+          description: Active users who are not already members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ProjectMemberCandidate"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/projects/{projectId}/tasks:
     get:
       tags: [Tasks]
       summary: List project tasks
       security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/TaskStatusFilter"
+        - $ref: "#/components/parameters/TaskPriorityFilter"
+        - $ref: "#/components/parameters/AssigneeId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        "200": {description: Paginated tasks}
+        "200":
+          description: Filtered project tasks ordered by most recently updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskPage"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
     post:
       tags: [Tasks]
       summary: Create a project task
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TaskInput"}
       responses:
-        "201": {description: Task created}
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/tasks/my:
     get:
       tags: [Tasks]
       summary: List tasks assigned to the current user
       security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/TaskStatusFilter"
+        - $ref: "#/components/parameters/TaskPriorityFilter"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        "200": {description: Paginated assigned tasks}
+        "200":
+          description: Filtered tasks assigned to the authenticated user
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskPage"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
   /api/v1/tasks/{taskId}:
     get:
       tags: [Tasks]
       summary: Get a task
       security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/TaskId"}]
       responses:
-        "200": {description: Task detail}
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
     patch:
       tags: [Tasks]
       summary: Update a task
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TaskInput"}
       responses:
-        "200": {description: Task updated}
+        "200":
+          description: Task updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
     delete:
       tags: [Tasks]
       summary: Delete a task
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CsrfHeader"
       responses:
         "204": {description: Task deleted}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/tasks/{taskId}/status:
     patch:
       tags: [Tasks]
       summary: Change task status
       security: [{sessionCookie: []}]
-      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TaskStatusInput"}
       responses:
-        "200": {description: Task status updated}
+        "200":
+          description: Task status updated; completedAt follows DONE status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/dashboard/summary:
     get:
       tags: [Dashboard]
       summary: Get task counters
       security: [{sessionCookie: []}]
       responses:
-        "200": {description: Dashboard summary}
+        "200":
+          description: System-wide totals for admins; assigned-task totals for employees
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DashboardSummary"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
 
 components:
   securitySchemes:
@@ -398,6 +635,54 @@ components:
       schema:
         type: integer
         format: int64
+        minimum: 1
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    Query:
+      name: query
+      in: query
+      required: false
+      schema: {type: string, default: ""}
+    Archived:
+      name: archived
+      in: query
+      required: false
+      description: Omit to include both active and archived projects.
+      schema: {type: boolean}
+    TaskStatusFilter:
+      name: status
+      in: query
+      required: false
+      schema: {$ref: "#/components/schemas/TaskStatus"}
+    TaskPriorityFilter:
+      name: priority
+      in: query
+      required: false
+      schema: {$ref: "#/components/schemas/TaskPriority"}
+    AssigneeId:
+      name: assigneeId
+      in: query
+      required: false
+      schema: {type: integer, format: int64, minimum: 1}
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: {type: integer, minimum: 0, default: 0}
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Values are clamped to the range 1–100.
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
 
   responses:
     AuthenticationRequired:
@@ -424,6 +709,16 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Requested project, task, member or user does not exist
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ApiError"}
+    Conflict:
+      description: Operation violates project state, membership or assignment rules
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ApiError"}
 
   schemas:
     LoginRequest:
@@ -455,7 +750,7 @@ components:
 
     CurrentUser:
       type: object
-      required: [id, name, email, role, mustChangePassword]
+      required: [id, name, email, role, jobTitle, mustChangePassword]
       properties:
         id:
           type: integer
@@ -468,12 +763,14 @@ components:
         role:
           type: string
           enum: [ADMIN, EMPLOYEE]
+        jobTitle:
+          $ref: "#/components/schemas/JobTitle"
         mustChangePassword:
           type: boolean
 
     AdminUser:
       type: object
-      required: [id, name, email, role, active, mustChangePassword, createdAt, updatedAt]
+      required: [id, name, email, role, jobTitle, active, mustChangePassword, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -486,6 +783,8 @@ components:
         role:
           type: string
           enum: [ADMIN, EMPLOYEE]
+        jobTitle:
+          $ref: "#/components/schemas/JobTitle"
         active:
           type: boolean
         mustChangePassword:
@@ -500,7 +799,7 @@ components:
     CreateUserRequest:
       type: object
       additionalProperties: false
-      required: [name, email, temporaryPassword, role]
+      required: [name, email, temporaryPassword, role, jobTitle]
       properties:
         name:
           type: string
@@ -517,11 +816,13 @@ components:
         role:
           type: string
           enum: [ADMIN, EMPLOYEE]
+        jobTitle:
+          $ref: "#/components/schemas/JobTitle"
 
     UpdateUserRequest:
       type: object
       additionalProperties: false
-      required: [name, role]
+      required: [name, role, jobTitle]
       properties:
         name:
           type: string
@@ -529,6 +830,13 @@ components:
         role:
           type: string
           enum: [ADMIN, EMPLOYEE]
+        jobTitle:
+          $ref: "#/components/schemas/JobTitle"
+
+    JobTitle:
+      type: string
+      description: Company job title, separate from the ADMIN/EMPLOYEE security role.
+      enum: [EMPLOYEE, TEAM_LEADER, MANAGER]
 
     ChangeUserStatusRequest:
       type: object
@@ -561,6 +869,142 @@ components:
           example: _csrf
         token:
           type: string
+
+    ProjectInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 150}
+        description: {type: [string, "null"], maxLength: 1000}
+
+    Project:
+      type: object
+      required: [id, ownerId, ownerName, name, archived, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        ownerId: {type: integer, format: int64}
+        ownerName: {type: string}
+        name: {type: string}
+        description: {type: [string, "null"]}
+        archived: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+
+    ProjectPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages, first, last]
+      properties:
+        content:
+          type: array
+          items: {$ref: "#/components/schemas/Project"}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+        first: {type: boolean}
+        last: {type: boolean}
+
+    ProjectMember:
+      type: object
+      required: [userId, name, email, role, jobTitle, joinedAt]
+      properties:
+        userId: {type: integer, format: int64}
+        name: {type: string}
+        email: {type: string, format: email}
+        role: {type: string, enum: [ADMIN, EMPLOYEE]}
+        jobTitle: {$ref: "#/components/schemas/JobTitle"}
+        joinedAt: {type: string, format: date-time}
+
+    ProjectMemberCandidate:
+      type: object
+      required: [id, name, email, role, jobTitle]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+        email: {type: string, format: email}
+        role: {type: string, enum: [ADMIN, EMPLOYEE]}
+        jobTitle: {$ref: "#/components/schemas/JobTitle"}
+
+    AddProjectMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [userIds]
+      properties:
+        userIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: {type: integer, format: int64, minimum: 1}
+
+    TaskStatus:
+      type: string
+      enum: [TODO, IN_PROGRESS, DONE, CANCELLED]
+
+    TaskPriority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    TaskInput:
+      type: object
+      additionalProperties: false
+      required: [title, priority]
+      properties:
+        assigneeId: {type: [integer, "null"], format: int64}
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: [string, "null"], maxLength: 5000}
+        priority: {$ref: "#/components/schemas/TaskPriority"}
+        dueAt: {type: [string, "null"], format: date-time}
+
+    TaskStatusInput:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: {$ref: "#/components/schemas/TaskStatus"}
+
+    Task:
+      type: object
+      required: [id, projectId, projectName, createdById, createdByName, title, status, priority, createdAt, updatedAt]
+      properties:
+        id: {type: integer, format: int64}
+        projectId: {type: integer, format: int64}
+        projectName: {type: string}
+        createdById: {type: integer, format: int64}
+        createdByName: {type: string}
+        assigneeId: {type: [integer, "null"], format: int64}
+        assigneeName: {type: [string, "null"]}
+        title: {type: string}
+        description: {type: [string, "null"]}
+        status: {$ref: "#/components/schemas/TaskStatus"}
+        priority: {$ref: "#/components/schemas/TaskPriority"}
+        dueAt: {type: [string, "null"], format: date-time}
+        completedAt: {type: [string, "null"], format: date-time}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+
+    TaskPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages, first, last]
+      properties:
+        content:
+          type: array
+          items: {$ref: "#/components/schemas/Task"}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+        first: {type: boolean}
+        last: {type: boolean}
+
+    DashboardSummary:
+      type: object
+      required: [openTasks, completedTasks, overdueTasks]
+      properties:
+        openTasks: {type: integer, format: int64, minimum: 0}
+        completedTasks: {type: integer, format: int64, minimum: 0}
+        overdueTasks: {type: integer, format: int64, minimum: 0}
 
     ApiError:
       type: object

@@ -4,7 +4,7 @@ import { isApiClientError } from "../../../shared/api/apiError";
 import { ConfirmDialog } from "../../../shared/ui/ConfirmDialog";
 import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedback";
 import { useToast } from "../../../shared/ui/ToastProvider";
-import type { UserRole } from "../../auth/types";
+import type { JobTitle, UserRole } from "../../auth/types";
 import { usersApi } from "../api/usersApi";
 import type { CreateUserInput, ManagedUser } from "../types";
 
@@ -13,6 +13,13 @@ const emptyForm: CreateUserInput = {
   email: "",
   temporaryPassword: "",
   role: "EMPLOYEE",
+  jobTitle: "EMPLOYEE",
+};
+
+const jobTitleLabels: Record<JobTitle, string> = {
+  EMPLOYEE: "Çalışan",
+  TEAM_LEADER: "Takım lideri",
+  MANAGER: "Müdür",
 };
 
 function errorMessage(error: unknown) {
@@ -33,6 +40,7 @@ export function UsersPage() {
   const [resetting, setResetting] = useState<ManagedUser | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
   const { showToast } = useToast();
 
   async function loadUsers() {
@@ -55,7 +63,7 @@ export function UsersPage() {
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
     if (!normalized) return users;
     return users.filter((user) =>
-      `${user.name} ${user.email} ${user.role}`.toLocaleLowerCase("tr-TR").includes(normalized),
+      `${user.name} ${user.email} ${user.role} ${jobTitleLabels[user.jobTitle]}`.toLocaleLowerCase("tr-TR").includes(normalized),
     );
   }, [query, users]);
 
@@ -86,6 +94,7 @@ export function UsersPage() {
       const updated = await usersApi.update(editing.id, {
         name: editing.name,
         role: editing.role,
+        jobTitle: editing.jobTitle,
       });
       replaceUser(updated);
       setEditing(null);
@@ -130,6 +139,22 @@ export function UsersPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setBusyId(deleteTarget.id);
+    setError(null);
+    try {
+      await usersApi.deleteUser(deleteTarget.id);
+      setUsers((current) => current.filter((user) => user.id !== deleteTarget.id));
+      showToast(`${deleteTarget.name} kalıcı olarak silindi.`);
+      setDeleteTarget(null);
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="page-stack">
       <header className="page-header">
@@ -153,6 +178,7 @@ export function UsersPage() {
             <label>E-posta<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
             <label>Geçici parola<input required minLength={12} maxLength={72} type="password" value={form.temporaryPassword} onChange={(event) => setForm({ ...form, temporaryPassword: event.target.value })} /><small>12–72 karakter; kullanıcı ilk girişte değiştirecek.</small></label>
             <label>Rol<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
+            <label>İş unvanı<select value={form.jobTitle} onChange={(event) => setForm({ ...form, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select><small>Takım lideri ve müdür proje açabilir.</small></label>
             <button className="primary-button compact-button" type="submit">Kaydet</button>
           </form>
         </section>
@@ -164,6 +190,7 @@ export function UsersPage() {
           <form className="management-form" onSubmit={handleEdit}>
             <label>Ad soyad<input required maxLength={100} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label>
             <label>Rol<select value={editing.role} onChange={(event) => setEditing({ ...editing, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
+            <label>İş unvanı<select value={editing.jobTitle} onChange={(event) => setEditing({ ...editing, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select></label>
             <div className="button-row"><button className="primary-button compact-button" disabled={busyId === editing.id} type="submit">Güncelle</button><button className="secondary-button" type="button" onClick={() => setEditing(null)}>Vazgeç</button></div>
           </form>
         </section>
@@ -188,14 +215,15 @@ export function UsersPage() {
         {loading ? <LoadingState label="Kullanıcılar yükleniyor…" /> : filteredUsers.length === 0 ? <EmptyState title="Eşleşen kullanıcı bulunamadı" description="Arama ifadenizi değiştirip yeniden deneyin." /> : (
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Kullanıcı</th><th>Rol</th><th>Durum</th><th>Parola</th><th><span className="sr-only">İşlemler</span></th></tr></thead>
+              <thead><tr><th>Kullanıcı</th><th>Sistem rolü</th><th>İş unvanı</th><th>Durum</th><th>Parola</th><th><span className="sr-only">İşlemler</span></th></tr></thead>
               <tbody>{filteredUsers.map((user) => (
                 <tr key={user.id}>
                   <td><strong>{user.name}</strong><span>{user.email}</span></td>
                   <td>{user.role === "ADMIN" ? "Yönetici" : "Çalışan"}</td>
+                  <td>{jobTitleLabels[user.jobTitle]}</td>
                   <td><span className={`status-label ${user.active ? "active" : "inactive"}`}>{user.active ? "Aktif" : "Pasif"}</span></td>
                   <td>{user.mustChangePassword ? "Değişiklik bekliyor" : "Güncel"}</td>
-                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button></div></td>
+                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button>{!user.active && <button className="danger-text" type="button" onClick={() => setDeleteTarget(user)}>Sil</button>}</div></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -211,6 +239,16 @@ export function UsersPage() {
         busy={statusTarget ? busyId === statusTarget.id : false}
         onCancel={() => setStatusTarget(null)}
         onConfirm={() => statusTarget && void handleStatus(statusTarget)}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Kullanıcı kalıcı olarak silinsin mi?"
+        description={deleteTarget ? `${deleteTarget.name} hesabı geri alınamayacak şekilde silinecek. Proje veya görev geçmişi varsa işlem engellenir.` : ""}
+        confirmLabel="Kullanıcıyı sil"
+        tone="danger"
+        busy={deleteTarget ? busyId === deleteTarget.id : false}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void handleDelete()}
       />
     </div>
   );

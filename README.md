@@ -134,7 +134,9 @@ Ardından aşağıdaki akışı kontrol edin:
 3. Sol menüden **Kullanıcılar** bağlantısını açın veya
    `http://localhost:8080/users` adresine gidin.
 4. **Kullanıcı ekle** ile en az 12 karakterli geçici parola kullanarak bir
-   `EMPLOYEE` hesabı oluşturun.
+   `EMPLOYEE` hesabı oluşturun ve iş unvanını seçin. `TEAM_LEADER` ile `MANAGER`
+   unvanları proje açabilir; sıradan `EMPLOYEE` yalnızca üye olduğu projelerde
+   görev oluşturabilir.
 5. Yeni kaydın listede `Aktif` ve `Değişiklik bekliyor` olarak göründüğünü
    doğrulayın.
 6. **Düzenle** ile adı veya rolü değiştirin.
@@ -142,6 +144,8 @@ Ardından aşağıdaki akışı kontrol edin:
    ardından tekrar aktifleştirin.
 8. **Parola** işlemiyle yeni bir geçici parola belirleyin. Kullanıcı bu parolayla
    giriş yaptığında `/change-password` sayfasına yönlendirilmelidir.
+9. Kullanıcı pasifken görünen **Sil** işlemini deneyin. Proje veya görev geçmişi
+   olmayan kullanıcı kalıcı olarak silinir; geçmişi bulunan kullanıcı korunur.
 
 Koruma kontrolleri:
 
@@ -176,3 +180,6 @@ açıklanmıştır.
 
 Proje, üyelik, görev ve dashboard özelliklerinin endpoint ve manuel kontrol
 adımları `docs/feature-testing.md` dosyasında açıklanmıştır.
+
+Eksiksiz HTTP sözleşmesi `docs/api/openapi.yaml`, rol ve proje kapsamı kuralları
+ise `docs/api/authorization-matrix.md` dosyasında tutulur.

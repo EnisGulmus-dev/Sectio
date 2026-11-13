@@ -46,6 +46,7 @@ class AuthControllerTest {
                 "Administrator",
                 "admin@example.com",
                 com.enis.sectio.user.Role.ADMIN,
+                com.enis.sectio.user.JobTitle.MANAGER,
                 true
         );
         when(authService.currentUser("admin@example.com"))

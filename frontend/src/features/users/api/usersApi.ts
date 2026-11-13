@@ -1,5 +1,5 @@
 import { apiRequest } from "../../../shared/api/httpClient";
-import type { UserRole } from "../../auth/types";
+import type { JobTitle, UserRole } from "../../auth/types";
 import type { CreateUserInput, ManagedUser } from "../types";
 
 const basePath = "/api/v1/admin/users";
@@ -13,7 +13,7 @@ export const usersApi = {
       body: JSON.stringify(input),
     }),
 
-  update: (id: number, input: { name: string; role: UserRole }) =>
+  update: (id: number, input: { name: string; role: UserRole; jobTitle: JobTitle }) =>
     apiRequest<ManagedUser>(`${basePath}/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -30,4 +30,7 @@ export const usersApi = {
       method: "POST",
       body: JSON.stringify({ temporaryPassword }),
     }),
+
+  deleteUser: (id: number) =>
+    apiRequest<void>(`${basePath}/${id}`, { method: "DELETE" }),
 };

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
@@ -31,14 +32,14 @@ public class DashboardController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (actor.getRole() == Role.ADMIN) {
             return new DashboardSummary(
-                    tasks.countByStatusNot(TaskStatus.DONE),
+                    tasks.countByStatusNotIn(List.of(TaskStatus.DONE, TaskStatus.CANCELLED)),
                     tasks.countByStatus(TaskStatus.DONE),
-                    tasks.countByDueAtBeforeAndStatusNot(Instant.now(), TaskStatus.DONE));
+                    tasks.countByDueAtBeforeAndStatusNotIn(Instant.now(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)));
         }
         return new DashboardSummary(
-                tasks.countByAssigneeEmailAndStatusNot(actor.getEmail(), TaskStatus.DONE),
+                tasks.countByAssigneeEmailAndStatusNotIn(actor.getEmail(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)),
                 tasks.countByAssigneeEmailAndStatus(actor.getEmail(), TaskStatus.DONE),
-                tasks.countByAssigneeEmailAndDueAtBeforeAndStatusNot(actor.getEmail(), Instant.now(), TaskStatus.DONE));
+                tasks.countByAssigneeEmailAndDueAtBeforeAndStatusNotIn(actor.getEmail(), Instant.now(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)));
     }
 
     public record DashboardSummary(long openTasks, long completedTasks, long overdueTasks) {}

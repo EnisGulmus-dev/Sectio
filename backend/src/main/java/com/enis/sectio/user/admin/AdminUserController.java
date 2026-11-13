@@ -1,6 +1,7 @@
 package com.enis.sectio.user.admin;
 
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,7 +40,7 @@ public class AdminUserController {
     @ResponseStatus(HttpStatus.CREATED)
     AdminUserResponse createUser(@Valid @RequestBody CreateUserRequest request) {
         return adminUserService.createUser(
-                request.name(), request.email(), request.temporaryPassword(), request.role()
+                request.name(), request.email(), request.temporaryPassword(), request.role(), request.jobTitle()
         );
     }
 
@@ -48,7 +50,7 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserRequest request,
             Authentication authentication) {
         return adminUserService.updateUser(
-                userId, request.name(), request.role(), authentication.getName()
+                userId, request.name(), request.role(), request.jobTitle(), authentication.getName()
         );
     }
 
@@ -60,6 +62,12 @@ public class AdminUserController {
         return adminUserService.changeStatus(
                 userId, request.active(), authentication.getName()
         );
+    }
+
+    @DeleteMapping("/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteUser(@PathVariable Long userId, Authentication authentication) {
+        adminUserService.deleteUser(userId, authentication.getName());
     }
 
     @PostMapping("/{userId}/reset-password")
@@ -88,7 +96,10 @@ public class AdminUserController {
             String temporaryPassword,
 
             @NotNull(message = "Role is required")
-            Role role
+            Role role,
+
+            @NotNull(message = "Job title is required")
+            JobTitle jobTitle
     ) {
     }
 
@@ -98,7 +109,10 @@ public class AdminUserController {
             String name,
 
             @NotNull(message = "Role is required")
-            Role role
+            Role role,
+
+            @NotNull(message = "Job title is required")
+            JobTitle jobTitle
     ) {
     }
 

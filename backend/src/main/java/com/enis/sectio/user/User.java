@@ -28,6 +28,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Role role;
 
+    @Column(name = "job_title", length = 30, nullable = false)
+    @Enumerated(EnumType.STRING)
+    private JobTitle jobTitle;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 
@@ -48,6 +52,7 @@ public class User {
         this.email = normalizeEmail(email);
         this.passwordHash = requireNonBlank(passwordHash, "passwordHash");
         this.role = Objects.requireNonNull(role, "role must not be null");
+        this.jobTitle = JobTitle.EMPLOYEE;
         this.active = true;
         this.mustChangePassword = true;
     }
@@ -87,6 +92,10 @@ public class User {
         return role;
     }
 
+    public JobTitle getJobTitle() {
+        return jobTitle;
+    }
+
     public boolean isActive() {
         return active;
     }
@@ -124,6 +133,10 @@ public class User {
 
     public void changeRole(Role role) {
         this.role = Objects.requireNonNull(role, "role must not be null");
+    }
+
+    public void changeJobTitle(JobTitle jobTitle) {
+        this.jobTitle = Objects.requireNonNull(jobTitle, "jobTitle must not be null");
     }
 
     public void activate() {
