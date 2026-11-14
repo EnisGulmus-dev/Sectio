@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../../auth/useAuth";
+import { canCreateProjects } from "../../auth/jobTitles";
 import { isApiClientError } from "../../../shared/api/apiError";
 import { ConfirmDialog } from "../../../shared/ui/ConfirmDialog";
 import { ModalPanel } from "../../../shared/ui/ModalPanel";
@@ -27,7 +28,7 @@ export function ProjectsPage() {
   const [busy, setBusy] = useState(false);
   const { user } = useAuth();
   const { showToast } = useToast();
-  const canCreateProject = user?.role === "ADMIN" || user?.jobTitle === "TEAM_LEADER" || user?.jobTitle === "MANAGER";
+  const canCreateProject = !!user && canCreateProjects(user.role, user.jobTitle);
 
   async function load(targetPage = page) {
     setLoading(true);

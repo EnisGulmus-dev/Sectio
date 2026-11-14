@@ -31,9 +31,9 @@ export function DashboardPage() {
       {error && <InlineAlert message={error} />}
       {!summary && !error ? <LoadingState /> : summary && (
         <section className="status-grid" aria-label="Görev özeti">
-          <article className="status-card accent"><span className="card-index">01</span><h2>Açık görev</h2><strong className="metric-value">{summary.openTasks}</strong></article>
-          <article className="status-card"><span className="card-index">02</span><h2>Tamamlanan</h2><strong className="metric-value">{summary.completedTasks}</strong></article>
-          <article className="status-card"><span className="card-index">03</span><h2>Geciken</h2><strong className="metric-value">{summary.overdueTasks}</strong></article>
+          <article className="status-card status-open"><span className="card-index">01</span><h2>Açık görev</h2><strong className="metric-value">{summary.openTasks}</strong></article>
+          <article className="status-card status-completed"><span className="card-index">02</span><h2>Tamamlanan</h2><strong className="metric-value">{summary.completedTasks}</strong></article>
+          <article className="status-card status-overdue"><span className="card-index">03</span><h2>Geciken</h2><strong className="metric-value">{summary.overdueTasks}</strong></article>
         </section>
       )}
 

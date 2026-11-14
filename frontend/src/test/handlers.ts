@@ -6,7 +6,7 @@ export const initialUsers = [
     name: "Sectio Admin",
     email: "admin@sectio.local",
     role: "ADMIN" as const,
-    jobTitle: "MANAGER" as const,
+    jobTitle: "PROJECT_MANAGER" as const,
     active: true,
     mustChangePassword: false,
     createdAt: "2026-11-13T09:00:00Z",
@@ -16,11 +16,11 @@ export const initialUsers = [
 
 export const handlers = [
   http.get("*/api/v1/projects/10/member-candidates", () => HttpResponse.json([
-    { id: 2, name: "Ada Çalışan", email: "ada@sectio.local", role: "EMPLOYEE", jobTitle: "EMPLOYEE" },
+    { id: 2, name: "Ada Çalışan", email: "ada@sectio.local", role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER" },
     { id: 3, name: "Mert Lider", email: "mert@sectio.local", role: "EMPLOYEE", jobTitle: "TEAM_LEADER" },
   ])),
   http.get("*/api/v1/projects/10/members", () => HttpResponse.json([
-    { userId: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "MANAGER", joinedAt: "2026-11-13T10:00:00Z" },
+    { userId: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "PROJECT_MANAGER", joinedAt: "2026-11-13T10:00:00Z" },
   ])),
   http.get("*/api/v1/projects/10/teams", () => HttpResponse.json([])),
   http.get("*/api/v1/projects/10/tasks*", () => HttpResponse.json({
@@ -36,7 +36,7 @@ export const handlers = [
       name: userId === 2 ? "Ada Çalışan" : "Mert Lider",
       email: userId === 2 ? "ada@sectio.local" : "mert@sectio.local",
       role: "EMPLOYEE",
-      jobTitle: userId === 2 ? "EMPLOYEE" : "TEAM_LEADER",
+      jobTitle: userId === 2 ? "SOFTWARE_DEVELOPER" : "TEAM_LEADER",
       joinedAt: "2026-11-13T10:30:00Z",
     })), { status: 201 });
   }),
@@ -59,7 +59,7 @@ export const handlers = [
       name: string;
       email: string;
       role: "ADMIN" | "EMPLOYEE";
-      jobTitle: "EMPLOYEE" | "TEAM_LEADER" | "MANAGER";
+      jobTitle: "SOFTWARE_DEVELOPER" | "SOFTWARE_ENGINEER" | "SENIOR_SOFTWARE_ENGINEER" | "TEAM_LEADER" | "PROJECT_MANAGER" | "PROJECT_OWNER";
     };
     return HttpResponse.json({
       id: 2,

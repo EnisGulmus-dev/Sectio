@@ -52,7 +52,7 @@ public class User {
         this.email = normalizeEmail(email);
         this.passwordHash = requireNonBlank(passwordHash, "passwordHash");
         this.role = Objects.requireNonNull(role, "role must not be null");
-        this.jobTitle = JobTitle.EMPLOYEE;
+        this.jobTitle = JobTitle.SOFTWARE_DEVELOPER;
         this.active = true;
         this.mustChangePassword = true;
     }

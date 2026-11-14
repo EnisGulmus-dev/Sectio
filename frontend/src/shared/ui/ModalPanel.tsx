@@ -5,9 +5,10 @@ type Props = {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 };
 
-export function ModalPanel({ open, title, children, onClose }: Props) {
+export function ModalPanel({ open, title, children, onClose, className = "" }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -28,7 +29,7 @@ export function ModalPanel({ open, title, children, onClose }: Props) {
     if (event.target === event.currentTarget) onClose();
   }
 
-  return <dialog className="form-dialog" ref={ref} aria-labelledby={titleId} onCancel={onClose} onClick={closeFromBackdrop}>
+  return <dialog className={`form-dialog${className ? ` ${className}` : ""}`} ref={ref} aria-labelledby={titleId} onCancel={onClose} onClick={closeFromBackdrop}>
     <section className="form-dialog-card">
       <header><h2 id={titleId}>{title}</h2><button type="button" aria-label="Pencereyi kapat" onClick={onClose}>×</button></header>
       <div className="form-dialog-body">{children}</div>

@@ -2,7 +2,6 @@ package com.enis.sectio.project;
 
 import com.enis.sectio.common.web.PageResponse;
 import com.enis.sectio.user.Role;
-import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
 import com.enis.sectio.task.TaskRepository;
@@ -30,10 +29,8 @@ public class ProjectService {
     @Transactional
     public ProjectResponse create(String email, String name, String description) {
         User owner = actor(email);
-        if (owner.getRole() != Role.ADMIN
-                && owner.getJobTitle() != JobTitle.TEAM_LEADER
-                && owner.getJobTitle() != JobTitle.MANAGER) {
-            throw error("PROJECT_CREATION_DENIED", "Only admins, team leaders or managers can create projects", HttpStatus.FORBIDDEN);
+        if (owner.getRole() != Role.ADMIN && !owner.getJobTitle().canCreateProjects()) {
+            throw error("PROJECT_CREATION_DENIED", "Only admins, team leaders and project management titles can create projects", HttpStatus.FORBIDDEN);
         }
         Project p = projects.save(new Project(owner, name, description)); members.save(new ProjectMember(p, owner)); return ProjectResponse.from(p);
     }

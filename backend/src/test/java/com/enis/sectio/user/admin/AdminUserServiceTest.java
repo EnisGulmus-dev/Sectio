@@ -91,7 +91,7 @@ class AdminUserServiceTest {
                 1L,
                 "Admin",
                 Role.EMPLOYEE,
-                JobTitle.EMPLOYEE,
+                JobTitle.SOFTWARE_DEVELOPER,
                 "another-admin@sectio.local"
         ))
                 .isInstanceOf(UserManagementException.class)

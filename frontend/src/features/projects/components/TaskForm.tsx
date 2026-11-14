@@ -36,9 +36,35 @@ function toggle(values: number[], id: number) {
   return values.includes(id) ? values.filter((value) => value !== id) : [...values, id];
 }
 
+function normalizeAssignments(value: TaskFormValue, teams: ProjectTeam[]): TaskFormValue {
+  if (value.allMembers) return { ...value, assigneeIds: [], teamIds: [] };
+
+  const teamIds = [...new Set(value.teamIds)];
+  const assigneeIds = new Set(value.assigneeIds);
+
+  for (const team of teams) {
+    if (teamIds.includes(team.id)) {
+      team.members.forEach((member) => assigneeIds.delete(member.userId));
+    }
+  }
+
+  for (const team of teams) {
+    if (teamIds.includes(team.id) || team.members.length === 0) continue;
+    if (team.members.every((member) => assigneeIds.has(member.userId))) {
+      teamIds.push(team.id);
+      team.members.forEach((member) => assigneeIds.delete(member.userId));
+    }
+  }
+
+  return { ...value, assigneeIds: [...assigneeIds], teamIds };
+}
+
 export function TaskForm({ initialValue = emptyTaskForm, members, teams = [], submitLabel, busy = false, onSubmit, onCancel }: Props) {
-  const [value, setValue] = useState(initialValue);
+  const [value, setValue] = useState(() => normalizeAssignments(initialValue, teams));
   const [assignmentError, setAssignmentError] = useState(false);
+  const selectedTeamMemberIds = new Set(teams
+    .filter((team) => value.teamIds.includes(team.id))
+    .flatMap((team) => team.members.map((member) => member.userId)));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -60,9 +86,9 @@ export function TaskForm({ initialValue = emptyTaskForm, members, teams = [], su
     <fieldset className={`assignment-picker${assignmentError ? " invalid" : ""}`}>
       <legend>Görevi kim yapacak?</legend>
       <p>Birden fazla çalışan, takım veya tüm proje üyelerini seçebilirsiniz.</p>
-      <label className="assignment-option everyone-option"><input type="checkbox" checked={value.allMembers} onChange={(event) => { setAssignmentError(false); setValue({ ...value, allMembers: event.target.checked }); }} /><span><strong>Herkes</strong><small>Projede yer alan tüm aktif üyeler</small></span></label>
-      {teams.length > 0 && <div className="assignment-group"><strong>Takımlar</strong><div className="assignment-options">{teams.map((team) => <label className="assignment-option" key={team.id}><input type="checkbox" disabled={value.allMembers} checked={value.teamIds.includes(team.id)} onChange={() => { setAssignmentError(false); setValue({ ...value, teamIds: toggle(value.teamIds, team.id) }); }} /><span><strong>{team.name}</strong><small>{team.members.length} kişi</small></span></label>)}</div></div>}
-      <div className="assignment-group"><strong>Proje üyeleri</strong><div className="assignment-options">{members.map((member) => <label className="assignment-option" key={member.userId}><input type="checkbox" disabled={value.allMembers} checked={value.assigneeIds.includes(member.userId)} onChange={() => { setAssignmentError(false); setValue({ ...value, assigneeIds: toggle(value.assigneeIds, member.userId) }); }} /><span><strong>{member.name}</strong><small>{member.email}</small></span></label>)}</div></div>
+      <label className="assignment-option everyone-option"><input type="checkbox" checked={value.allMembers} onChange={(event) => { setAssignmentError(false); setValue((current) => normalizeAssignments({ ...current, allMembers: event.target.checked }, teams)); }} /><span><strong>Herkes</strong><small>Projede yer alan tüm aktif üyeler</small></span></label>
+      {teams.length > 0 && <div className="assignment-group"><strong>Takımlar</strong><div className="assignment-options">{teams.map((team) => <label className="assignment-option" key={team.id}><input type="checkbox" disabled={value.allMembers} checked={value.teamIds.includes(team.id)} onChange={() => { setAssignmentError(false); setValue((current) => normalizeAssignments({ ...current, teamIds: toggle(current.teamIds, team.id) }, teams)); }} /><span><strong>{team.name}</strong><small>{team.members.length} kişi</small></span></label>)}</div></div>}
+      <div className="assignment-group"><strong>Proje üyeleri</strong><div className="assignment-options">{members.map((member) => { const coveredByTeam = selectedTeamMemberIds.has(member.userId); return <label className="assignment-option" key={member.userId}><input type="checkbox" disabled={value.allMembers || coveredByTeam} checked={value.assigneeIds.includes(member.userId)} onChange={() => { setAssignmentError(false); setValue((current) => normalizeAssignments({ ...current, assigneeIds: toggle(current.assigneeIds, member.userId) }, teams)); }} /><span><strong>{member.name}</strong><small>{coveredByTeam ? "Seçili takım kapsamında" : member.email}</small></span></label>; })}</div></div>
       {assignmentError && <span className="field-error">En az bir çalışan, takım veya “Herkes” seçeneğini belirleyin.</span>}
     </fieldset>
 

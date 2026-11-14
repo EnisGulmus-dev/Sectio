@@ -7,6 +7,7 @@ import { PasswordInput } from "../../../shared/ui/PasswordInput";
 import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedback";
 import { useToast } from "../../../shared/ui/ToastProvider";
 import type { JobTitle, UserRole } from "../../auth/types";
+import { jobTitleLabels, jobTitleOptions } from "../../auth/jobTitles";
 import { usersApi } from "../api/usersApi";
 import type { CreateUserInput, ManagedUser, UserDeletionImpact } from "../types";
 
@@ -15,13 +16,7 @@ const emptyForm: CreateUserInput = {
   email: "",
   temporaryPassword: "",
   role: "EMPLOYEE",
-  jobTitle: "EMPLOYEE",
-};
-
-const jobTitleLabels: Record<JobTitle, string> = {
-  EMPLOYEE: "Çalışan",
-  TEAM_LEADER: "Takım lideri",
-  MANAGER: "Müdür",
+  jobTitle: "SOFTWARE_DEVELOPER",
 };
 
 function errorMessage(error: unknown) {
@@ -203,7 +198,7 @@ export function UsersPage() {
             <label>E-posta<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
             <label>Geçici parola<PasswordInput required minLength={12} maxLength={72} value={form.temporaryPassword} onChange={(event) => setForm({ ...form, temporaryPassword: event.target.value })} /><small>12–72 karakter; kullanıcı ilk girişte değiştirecek.</small></label>
             <label>Rol<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
-            <label>İş unvanı<select value={form.jobTitle} onChange={(event) => setForm({ ...form, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select><small>Takım lideri ve müdür proje açabilir.</small></label>
+            <label>İş unvanı<select value={form.jobTitle} onChange={(event) => setForm({ ...form, jobTitle: event.target.value as JobTitle })}>{jobTitleOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><small>Takım lideri, proje yöneticisi ve proje sahibi proje açabilir.</small></label>
             <button className="primary-button compact-button" type="submit">Kaydet</button>
           </form>
       </ModalPanel>
@@ -213,7 +208,7 @@ export function UsersPage() {
           <form className="management-form" onSubmit={handleEdit}>
             <label>Ad soyad<input required maxLength={100} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label>
             <label>Rol<select value={editing.role} onChange={(event) => setEditing({ ...editing, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
-            <label>İş unvanı<select value={editing.jobTitle} onChange={(event) => setEditing({ ...editing, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select></label>
+            <label>İş unvanı<select value={editing.jobTitle} onChange={(event) => setEditing({ ...editing, jobTitle: event.target.value as JobTitle })}>{jobTitleOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
             <div className="button-row"><button className="primary-button compact-button" disabled={busyId === editing.id} type="submit">Güncelle</button><button className="secondary-button" type="button" onClick={() => setEditing(null)}>Vazgeç</button></div>
           </form>
         )}

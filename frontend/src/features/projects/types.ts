@@ -3,7 +3,7 @@ export type Project={id:number;ownerId:number;ownerName:string;name:string;descr
 import type { JobTitle } from "../auth/types";
 export type ProjectMember={userId:number;name:string;email:string;role:"ADMIN"|"EMPLOYEE";jobTitle:JobTitle;joinedAt:string};
 export type ProjectMemberCandidate={id:number;name:string;email:string;role:"ADMIN"|"EMPLOYEE";jobTitle:JobTitle};
-export type ProjectTeamMember={userId:number;name:string};
+export type ProjectTeamMember={userId:number;name:string;email:string;jobTitle:JobTitle};
 export type ProjectTeam={id:number;name:string;members:ProjectTeamMember[];createdAt:string};
 export type TaskStatus="TODO"|"IN_PROGRESS"|"DONE"|"CANCELLED"; export type TaskPriority="LOW"|"MEDIUM"|"HIGH"|"CRITICAL";
 export type TaskAssignee={userId:number;name:string};

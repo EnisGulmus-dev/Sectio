@@ -7,7 +7,7 @@ import { ToastProvider } from "../../../shared/ui/ToastProvider";
 import { ProjectDetailPage } from "./ProjectDetailPage";
 
 vi.mock("../../auth/useAuth", () => ({
-  useAuth: () => ({ user: { id: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "MANAGER", mustChangePassword: false } }),
+  useAuth: () => ({ user: { id: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "PROJECT_MANAGER", mustChangePassword: false } }),
 }));
 
 describe("ProjectDetailPage", () => {

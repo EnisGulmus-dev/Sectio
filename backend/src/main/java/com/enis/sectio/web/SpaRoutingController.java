@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class SpaRoutingController {
 
     @GetMapping({
-            "/{path:^(?!api$|actuator$|assets$|error$)[^.]*}",
-            "/{path:^(?!api$|actuator$|assets$|error$)[^.]*}/**"
+            "/{path:^(?!api$|actuator$|assets$|brand$|error$)[^.]*}",
+            "/{path:^(?!api$|actuator$|assets$|brand$|error$)[^.]*}/**"
     })
     public String forwardClientRoutes() {
         return "forward:/index.html";

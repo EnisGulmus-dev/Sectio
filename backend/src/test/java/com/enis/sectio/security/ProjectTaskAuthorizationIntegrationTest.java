@@ -180,6 +180,69 @@ class ProjectTaskAuthorizationIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = MEMBER_EMAIL, roles = "EMPLOYEE")
+    void developerCannotCreateTasks() throws Exception {
+        authenticate(member);
+
+        mvc.perform(post("/api/v1/projects/10/tasks").with(csrf())
+                        .contentType("application/json")
+                        .content("""
+                                {"assigneeIds":[2],"teamIds":[],"allMembers":false,"title":"Unauthorized task","description":"","priority":"MEDIUM","dueAt":null}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PROJECT_MANAGEMENT_DENIED"));
+    }
+
+    @Test
+    @WithMockUser(username = MEMBER_EMAIL, roles = "EMPLOYEE")
+    void assignedDeveloperCanChangeOwnTaskStatus() throws Exception {
+        authenticate(member);
+        when(members.existsByProjectIdAndUserId(10L, 2L)).thenReturn(true);
+        Task task = task(20L, Set.of(member));
+        when(tasks.findById(20L)).thenReturn(Optional.of(task));
+
+        mvc.perform(patch("/api/v1/tasks/20/status").with(csrf())
+                        .contentType("application/json")
+                        .content("{\"status\":\"IN_PROGRESS\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+    }
+
+    @Test
+    @WithMockUser(username = MEMBER_EMAIL, roles = "EMPLOYEE")
+    void developerCannotChangeAnotherUsersTaskStatus() throws Exception {
+        authenticate(member);
+        when(members.existsByProjectIdAndUserId(10L, 2L)).thenReturn(true);
+        when(tasks.findById(20L)).thenReturn(Optional.of(task(20L, Set.of(owner))));
+
+        mvc.perform(patch("/api/v1/tasks/20/status").with(csrf())
+                        .contentType("application/json")
+                        .content("{\"status\":\"DONE\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("TASK_STATUS_DENIED"));
+    }
+
+    @Test
+    @WithMockUser(username = MEMBER_EMAIL, roles = "EMPLOYEE")
+    void developerCannotEditOrDeleteTasks() throws Exception {
+        authenticate(member);
+        Task task = task(20L, Set.of(member));
+        when(tasks.findById(20L)).thenReturn(Optional.of(task));
+
+        mvc.perform(patch("/api/v1/tasks/20").with(csrf())
+                        .contentType("application/json")
+                        .content("""
+                                {"assigneeIds":[2],"teamIds":[],"allMembers":false,"title":"Changed","description":"","priority":"HIGH","dueAt":null}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PROJECT_MANAGEMENT_DENIED"));
+
+        mvc.perform(delete("/api/v1/tasks/20").with(csrf()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PROJECT_MANAGEMENT_DENIED"));
+    }
+
+    @Test
     @WithMockUser(username = OWNER_EMAIL, roles = "EMPLOYEE")
     void archivedProjectRejectsTaskChanges() throws Exception {
         authenticate(owner);
@@ -207,6 +270,12 @@ class ProjectTaskAuthorizationIntegrationTest {
     }
 
     private void authenticate(User user) { when(users.findByEmail(user.getEmail())).thenReturn(Optional.of(user)); }
+
+    private Task task(Long id, Set<User> assignees) {
+        Task task = new Task(project, owner, assignees, "Authorized task", null, TaskPriority.MEDIUM, null);
+        ReflectionTestUtils.setField(task, "id", id);
+        return task;
+    }
 
     private static User user(Long id, String name, String email, Role role) {
         User user = new User(name, email, "password-hash", role);

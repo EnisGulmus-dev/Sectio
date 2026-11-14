@@ -7,6 +7,7 @@ import com.enis.sectio.project.ProjectService;
 import com.enis.sectio.project.ProjectTeamService;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
+import com.enis.sectio.user.Role;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -51,7 +52,7 @@ public class TaskService {
     @Transactional
     public TaskResponse create(Long projectId, String email, List<Long> assigneeIds, List<Long> teamIds,
                                boolean allMembers, String title, String description, TaskPriority priority, Instant dueAt) {
-        Project project = projects.accessibleEntity(projectId, email);
+        Project project = projects.manageableEntity(projectId, email);
         active(project);
         return TaskResponse.from(tasks.save(new Task(project, projects.actor(email),
                 resolveAssignees(project, assigneeIds, teamIds, allMembers), title, description, priority, dueAt)));
@@ -60,7 +61,7 @@ public class TaskService {
     @Transactional
     public TaskResponse update(Long id, String email, List<Long> assigneeIds, List<Long> teamIds,
                                boolean allMembers, String title, String description, TaskPriority priority, Instant dueAt) {
-        Task task = accessible(id, email);
+        Task task = manageable(id, email);
         active(task.getProject());
         task.update(resolveAssignees(task.getProject(), assigneeIds, teamIds, allMembers), title, description, priority, dueAt);
         return TaskResponse.from(task);
@@ -68,11 +69,18 @@ public class TaskService {
 
     @Transactional
     public TaskResponse status(Long id, String email, TaskStatus status) {
-        Task task = accessible(id, email); active(task.getProject()); task.changeStatus(status); return TaskResponse.from(task);
+        Task task = accessible(id, email);
+        User actor = projects.actor(email);
+        boolean managesProject = actor.getRole() == Role.ADMIN || task.getProject().getOwner().getId().equals(actor.getId());
+        boolean assigned = task.getAssignees().stream().anyMatch(user -> user.getId().equals(actor.getId()));
+        if (!managesProject && !assigned) {
+            throw error("TASK_STATUS_DENIED", "Only project managers or assigned users can change task status", HttpStatus.FORBIDDEN);
+        }
+        active(task.getProject()); task.changeStatus(status); return TaskResponse.from(task);
     }
 
     @Transactional
-    public void delete(Long id, String email) { Task task = accessible(id, email); active(task.getProject()); tasks.delete(task); }
+    public void delete(Long id, String email) { Task task = manageable(id, email); active(task.getProject()); tasks.delete(task); }
 
     private Set<User> resolveAssignees(Project project, List<Long> assigneeIds, List<Long> teamIds, boolean allMembers) {
         Set<User> resolved = new LinkedHashSet<>();
@@ -92,6 +100,10 @@ public class TaskService {
     private Task accessible(Long id, String email) {
         Task task = tasks.findById(id).orElseThrow(() -> error("TASK_NOT_FOUND", "Task was not found", HttpStatus.NOT_FOUND));
         projects.accessibleEntity(task.getProject().getId(), email); return task;
+    }
+    private Task manageable(Long id, String email) {
+        Task task = tasks.findById(id).orElseThrow(() -> error("TASK_NOT_FOUND", "Task was not found", HttpStatus.NOT_FOUND));
+        projects.manageableEntity(task.getProject().getId(), email); return task;
     }
     private static void active(Project project) { if (project.isArchived()) throw error("PROJECT_ARCHIVED", "Archived project cannot be changed", HttpStatus.CONFLICT); }
     private static String normalize(String query) { return query == null ? "" : query.trim(); }
