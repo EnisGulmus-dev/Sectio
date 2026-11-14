@@ -8,10 +8,16 @@ and use the URLs below.
 - UI: `/users`
 - API: `DELETE /api/v1/admin/users/{userId}`
 
-Deactivate a user and verify that the **Sil** action appears. An unused inactive
-user can be permanently deleted after confirmation. Active users, the current
-admin, and users referenced by a project, membership or task must be rejected so
-project history and foreign-key integrity remain intact.
+Choose **Sil** and verify that an impact preview reports project memberships and
+affected tasks before confirmation. On confirmation, memberships and assignments
+are removed; tasks with no remaining assignee and tasks created by the deleted
+user are deleted. The current admin and project owners remain protected;
+project ownership must be transferred or the project deleted first.
+
+Verify that invalid email formats show an error notification. Password fields on
+login, mandatory password change, user creation and password reset must expose a
+**Göster/Gizle** control. A passive user must receive the specific message
+“Hesabınız pasife alındı, yöneticinizle görüşün” at login.
 
 ## Projects
 
@@ -36,6 +42,8 @@ job titles are separate from the `ADMIN`/`EMPLOYEE` security role.
 - API: `GET/POST /api/v1/projects/{id}/members`
 - API: `GET /api/v1/projects/{id}/member-candidates`
 - API: `DELETE /api/v1/projects/{id}/members/{userId}`
+- Teams: `GET/POST /api/v1/projects/{id}/teams`,
+  `PATCH/DELETE /api/v1/projects/{id}/teams/{teamId}`
 
 Select multiple active users from the project detail page and add them in one
 operation. Duplicate and inactive users
@@ -46,6 +54,11 @@ Focus the member search field and verify that eligible active users appear in a
 dropdown. Search by name or email and select multiple results. Click outside the
 picker and verify that the dropdown closes without clearing selected users. The
 project owner must remain first in the member list.
+
+Create “A Takımı” and select multiple project members. Verify that the team is
+listed separately from project membership and can be selected while creating a
+task. Deleting a team removes only the team heading; its users remain project
+members and existing task assignments remain as an assignment snapshot.
 
 Assign an active TODO or IN_PROGRESS task to a member and verify that member
 removal returns a conflict. Change every assigned task to DONE or CANCELLED and
@@ -58,9 +71,18 @@ verify that the member can then be removed.
 - Status: `PATCH /api/v1/tasks/{id}/status`
 - Personal list: `GET /api/v1/tasks/my`, UI `/my-tasks`
 
-Create a task from a project detail page, assign an active member and change its
+Create a task from the modal panel; assign multiple active members, a named team,
+or **Herkes**, then change its
 status from TODO to IN_PROGRESS, DONE and CANCELLED. DONE sets `completedAt`; moving away
-from DONE clears it. A non-member or inactive assignee must be rejected.
+from DONE clears it. Duplicate members selected directly and through a team are
+deduplicated. A non-member or inactive assignee must be rejected. A task cannot
+be created without an assignee; removing the final assignee deletes the task.
+
+Verify that project information, members/teams, and tasks are independently
+collapsible. Modal workflows use the same viewport-relative shell, keep their
+actions visible while content scrolls, and collapse to a nearly full-screen
+layout on a phone-sized viewport. The sidebar collapse state persists after a
+page refresh.
 
 Use the task toolbar to filter by title, status, priority and assignee. Edit a
 task and verify the title, assignee, priority, description and due date are

@@ -109,7 +109,7 @@ class PasswordChangeRequiredFilterTest {
         filter.doFilter(request, response, new MockFilterChain());
 
         assertThat(response.getStatus()).isEqualTo(401);
-        assertThat(response.getContentAsString()).contains("ACCOUNT_UNAVAILABLE");
+        assertThat(response.getContentAsString()).contains("ACCOUNT_DISABLED").contains("pasife alındı");
         assertThat(SecurityContextHolder.getContext().getAuthentication())
                 .isNull();
         assertThat(session.isInvalid()).isTrue();

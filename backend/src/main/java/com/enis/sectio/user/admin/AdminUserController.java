@@ -70,6 +70,11 @@ public class AdminUserController {
         adminUserService.deleteUser(userId, authentication.getName());
     }
 
+    @GetMapping("/{userId}/deletion-impact")
+    AdminUserService.UserDeletionImpact deletionImpact(@PathVariable Long userId) {
+        return adminUserService.deletionImpact(userId);
+    }
+
     @PostMapping("/{userId}/reset-password")
     AdminUserResponse resetPassword(
             @PathVariable Long userId,

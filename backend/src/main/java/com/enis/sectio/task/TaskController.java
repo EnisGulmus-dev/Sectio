@@ -4,12 +4,14 @@ import com.enis.sectio.common.web.PageResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 public class TaskController {
@@ -31,8 +33,8 @@ public class TaskController {
     @PostMapping("/api/v1/projects/{projectId}/tasks")
     @ResponseStatus(HttpStatus.CREATED)
     TaskResponse create(@PathVariable Long projectId, @Valid @RequestBody TaskInput request, Authentication authentication) {
-        return service.create(projectId, authentication.getName(), request.assigneeId(), request.title(),
-                request.description(), request.priority(), request.dueAt());
+        return service.create(projectId, authentication.getName(), request.assigneeIds(), request.teamIds(),
+                request.allMembers(), request.title(), request.description(), request.priority(), request.dueAt());
     }
 
     @GetMapping("/api/v1/tasks/my")
@@ -50,8 +52,8 @@ public class TaskController {
 
     @PatchMapping("/api/v1/tasks/{id}")
     TaskResponse update(@PathVariable Long id, @Valid @RequestBody TaskInput request, Authentication authentication) {
-        return service.update(id, authentication.getName(), request.assigneeId(), request.title(),
-                request.description(), request.priority(), request.dueAt());
+        return service.update(id, authentication.getName(), request.assigneeIds(), request.teamIds(),
+                request.allMembers(), request.title(), request.description(), request.priority(), request.dueAt());
     }
 
     @PatchMapping("/api/v1/tasks/{id}/status")
@@ -63,7 +65,11 @@ public class TaskController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable Long id, Authentication authentication) { service.delete(id, authentication.getName()); }
 
-    public record TaskInput(Long assigneeId, @NotBlank @Size(max = 200) String title,
-                            @Size(max = 5000) String description, @NotNull TaskPriority priority, Instant dueAt) {}
+    public record TaskInput(@Size(max = 50) List<@Positive Long> assigneeIds,
+                            @Size(max = 20) List<@Positive Long> teamIds,
+                            boolean allMembers,
+                            @NotBlank @Size(max = 200) String title,
+                            @Size(max = 5000) String description,
+                            @NotNull TaskPriority priority, Instant dueAt) {}
     public record StatusInput(@NotNull TaskStatus status) {}
 }

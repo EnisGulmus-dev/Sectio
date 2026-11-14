@@ -2,11 +2,13 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { isApiClientError } from "../../../shared/api/apiError";
 import { ConfirmDialog } from "../../../shared/ui/ConfirmDialog";
+import { ModalPanel } from "../../../shared/ui/ModalPanel";
+import { PasswordInput } from "../../../shared/ui/PasswordInput";
 import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedback";
 import { useToast } from "../../../shared/ui/ToastProvider";
 import type { JobTitle, UserRole } from "../../auth/types";
 import { usersApi } from "../api/usersApi";
-import type { CreateUserInput, ManagedUser } from "../types";
+import type { CreateUserInput, ManagedUser, UserDeletionImpact } from "../types";
 
 const emptyForm: CreateUserInput = {
   name: "",
@@ -41,6 +43,7 @@ export function UsersPage() {
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [statusTarget, setStatusTarget] = useState<ManagedUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
+  const [deletionImpact, setDeletionImpact] = useState<UserDeletionImpact | null>(null);
   const { showToast } = useToast();
 
   async function loadUsers() {
@@ -74,6 +77,10 @@ export function UsersPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      showToast("Geçerli bir e-posta adresi girin. Örnek: ad@firma.com", "error");
+      return;
+    }
     try {
       const created = await usersApi.create(form);
       setUsers((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name, "tr")));
@@ -148,12 +155,32 @@ export function UsersPage() {
       setUsers((current) => current.filter((user) => user.id !== deleteTarget.id));
       showToast(`${deleteTarget.name} kalıcı olarak silindi.`);
       setDeleteTarget(null);
+      setDeletionImpact(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
       setBusyId(null);
     }
   }
+
+  async function prepareDelete(user: ManagedUser) {
+    setBusyId(user.id);
+    setError(null);
+    try {
+      setDeletionImpact(await usersApi.deletionImpact(user.id));
+      setDeleteTarget(user);
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const deleteDescription = deleteTarget && deletionImpact
+    ? deletionImpact.ownedProjects > 0
+      ? `${deleteTarget.name} ${deletionImpact.ownedProjects} projenin sahibi. Bu projeler devredilmeden veya silinmeden kullanıcı silinemez.`
+      : `${deleteTarget.name} silinecek; ${deletionImpact.projectMemberships} proje üyeliği ve ${deletionImpact.assignedTasks} görev ataması kaldırılacak. Başka çalışanı kalmayan görevler otomatik silinecek. Emin misiniz?`
+    : "";
 
   return (
     <div className="page-stack">
@@ -163,48 +190,43 @@ export function UsersPage() {
           <h1>Kullanıcılar</h1>
           <p>Çalışan hesaplarını, rollerini ve erişim durumlarını yönetin.</p>
         </div>
-        <button className="primary-button compact-button" type="button" onClick={() => setShowCreate((value) => !value)}>
-          {showCreate ? "Formu kapat" : "Kullanıcı ekle"}
+        <button className="primary-button compact-button" type="button" aria-haspopup="dialog" onClick={() => setShowCreate(true)}>
+          Kullanıcı ekle
         </button>
       </header>
 
       {error && <InlineAlert message={error} />}
 
-      {showCreate && (
-        <section className="panel">
-          <h2>Yeni kullanıcı</h2>
+      <ModalPanel open={showCreate} title="Yeni kullanıcı" onClose={() => setShowCreate(false)}>
           <form className="management-form" onSubmit={handleCreate}>
             <label>Ad soyad<input required maxLength={100} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
             <label>E-posta<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-            <label>Geçici parola<input required minLength={12} maxLength={72} type="password" value={form.temporaryPassword} onChange={(event) => setForm({ ...form, temporaryPassword: event.target.value })} /><small>12–72 karakter; kullanıcı ilk girişte değiştirecek.</small></label>
+            <label>Geçici parola<PasswordInput required minLength={12} maxLength={72} value={form.temporaryPassword} onChange={(event) => setForm({ ...form, temporaryPassword: event.target.value })} /><small>12–72 karakter; kullanıcı ilk girişte değiştirecek.</small></label>
             <label>Rol<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
             <label>İş unvanı<select value={form.jobTitle} onChange={(event) => setForm({ ...form, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select><small>Takım lideri ve müdür proje açabilir.</small></label>
             <button className="primary-button compact-button" type="submit">Kaydet</button>
           </form>
-        </section>
-      )}
+      </ModalPanel>
 
-      {editing && (
-        <section className="panel">
-          <h2>Kullanıcıyı düzenle</h2>
+      <ModalPanel open={editing !== null} title="Kullanıcıyı düzenle" onClose={() => setEditing(null)}>
+        {editing && (
           <form className="management-form" onSubmit={handleEdit}>
             <label>Ad soyad<input required maxLength={100} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></label>
             <label>Rol<select value={editing.role} onChange={(event) => setEditing({ ...editing, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
             <label>İş unvanı<select value={editing.jobTitle} onChange={(event) => setEditing({ ...editing, jobTitle: event.target.value as JobTitle })}><option value="EMPLOYEE">Çalışan</option><option value="TEAM_LEADER">Takım lideri</option><option value="MANAGER">Müdür</option></select></label>
             <div className="button-row"><button className="primary-button compact-button" disabled={busyId === editing.id} type="submit">Güncelle</button><button className="secondary-button" type="button" onClick={() => setEditing(null)}>Vazgeç</button></div>
           </form>
-        </section>
-      )}
+        )}
+      </ModalPanel>
 
-      {resetting && (
-        <section className="panel">
-          <h2>{resetting.name} için geçici parola</h2>
+      <ModalPanel open={resetting !== null} title={resetting ? `${resetting.name} için geçici parola` : "Geçici parola"} onClose={() => setResetting(null)}>
+        {resetting && (
           <form className="management-form" onSubmit={handleResetPassword}>
-            <label>Yeni geçici parola<input required minLength={12} maxLength={72} type="password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} /></label>
+            <label>Yeni geçici parola<PasswordInput required minLength={12} maxLength={72} value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} /></label>
             <div className="button-row"><button className="primary-button compact-button" disabled={busyId === resetting.id} type="submit">Parolayı sıfırla</button><button className="secondary-button" type="button" onClick={() => setResetting(null)}>Vazgeç</button></div>
           </form>
-        </section>
-      )}
+        )}
+      </ModalPanel>
 
       <section className="panel table-panel">
         <div className="table-toolbar">
@@ -223,7 +245,7 @@ export function UsersPage() {
                   <td>{jobTitleLabels[user.jobTitle]}</td>
                   <td><span className={`status-label ${user.active ? "active" : "inactive"}`}>{user.active ? "Aktif" : "Pasif"}</span></td>
                   <td>{user.mustChangePassword ? "Değişiklik bekliyor" : "Güncel"}</td>
-                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button>{!user.active && <button className="danger-text" type="button" onClick={() => setDeleteTarget(user)}>Sil</button>}</div></td>
+                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button><button className="danger-text" disabled={busyId === user.id} type="button" onClick={() => void prepareDelete(user)}>Sil</button></div></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -243,11 +265,11 @@ export function UsersPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Kullanıcı kalıcı olarak silinsin mi?"
-        description={deleteTarget ? `${deleteTarget.name} hesabı geri alınamayacak şekilde silinecek. Proje veya görev geçmişi varsa işlem engellenir.` : ""}
+        description={deleteDescription}
         confirmLabel="Kullanıcıyı sil"
         tone="danger"
         busy={deleteTarget ? busyId === deleteTarget.id : false}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => { setDeleteTarget(null); setDeletionImpact(null); }}
         onConfirm={() => void handleDelete()}
       />
     </div>

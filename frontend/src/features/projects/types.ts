@@ -3,6 +3,9 @@ export type Project={id:number;ownerId:number;ownerName:string;name:string;descr
 import type { JobTitle } from "../auth/types";
 export type ProjectMember={userId:number;name:string;email:string;role:"ADMIN"|"EMPLOYEE";jobTitle:JobTitle;joinedAt:string};
 export type ProjectMemberCandidate={id:number;name:string;email:string;role:"ADMIN"|"EMPLOYEE";jobTitle:JobTitle};
+export type ProjectTeamMember={userId:number;name:string};
+export type ProjectTeam={id:number;name:string;members:ProjectTeamMember[];createdAt:string};
 export type TaskStatus="TODO"|"IN_PROGRESS"|"DONE"|"CANCELLED"; export type TaskPriority="LOW"|"MEDIUM"|"HIGH"|"CRITICAL";
-export type Task={id:number;projectId:number;projectName:string;createdById:number;createdByName:string;assigneeId:number|null;assigneeName:string|null;title:string;description:string|null;status:TaskStatus;priority:TaskPriority;dueAt:string|null;completedAt:string|null;createdAt:string;updatedAt:string};
-export type TaskInput={title:string;description:string;assigneeId:number|null;priority:TaskPriority;dueAt:string|null};
+export type TaskAssignee={userId:number;name:string};
+export type Task={id:number;projectId:number;projectName:string;createdById:number;createdByName:string;assignees:TaskAssignee[];title:string;description:string|null;status:TaskStatus;priority:TaskPriority;dueAt:string|null;completedAt:string|null;createdAt:string;updatedAt:string};
+export type TaskInput={title:string;description:string;assigneeIds:number[];teamIds:number[];allMembers:boolean;priority:TaskPriority;dueAt:string|null};

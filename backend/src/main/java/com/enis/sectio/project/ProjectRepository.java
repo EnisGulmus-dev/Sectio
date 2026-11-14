@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface ProjectRepository extends JpaRepository<Project, Long> {
     boolean existsByOwnerId(Long ownerId);
+    long countByOwnerId(Long ownerId);
 
     @Query("""
         select distinct p from Project p left join ProjectMember pm on pm.project = p

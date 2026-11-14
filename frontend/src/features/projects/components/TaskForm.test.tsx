@@ -13,14 +13,14 @@ describe("TaskForm", () => {
     render(<TaskForm members={members} submitLabel="Görev oluştur" onSubmit={onSubmit} />);
 
     await user.type(screen.getByLabelText("Başlık"), "API sözleşmesini tamamla");
-    await user.selectOptions(screen.getByLabelText("Atanan"), "2");
+    await user.click(screen.getByLabelText(/Ada Çalışan/));
     await user.selectOptions(screen.getByLabelText("Öncelik"), "HIGH");
     await user.type(screen.getByLabelText("Açıklama"), "OpenAPI şemalarını ekle");
     await user.click(screen.getByRole("button", { name: "Görev oluştur" }));
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       title: "API sözleşmesini tamamla",
-      assigneeId: "2",
+      assigneeIds: [2],
       priority: "HIGH",
       description: "OpenAPI şemalarını ekle",
     }));

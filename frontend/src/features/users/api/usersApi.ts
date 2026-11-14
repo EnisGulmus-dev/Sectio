@@ -1,6 +1,6 @@
 import { apiRequest } from "../../../shared/api/httpClient";
 import type { JobTitle, UserRole } from "../../auth/types";
-import type { CreateUserInput, ManagedUser } from "../types";
+import type { CreateUserInput, ManagedUser, UserDeletionImpact } from "../types";
 
 const basePath = "/api/v1/admin/users";
 
@@ -33,4 +33,7 @@ export const usersApi = {
 
   deleteUser: (id: number) =>
     apiRequest<void>(`${basePath}/${id}`, { method: "DELETE" }),
+
+  deletionImpact: (id: number) =>
+    apiRequest<UserDeletionImpact>(`${basePath}/${id}/deletion-impact`),
 };

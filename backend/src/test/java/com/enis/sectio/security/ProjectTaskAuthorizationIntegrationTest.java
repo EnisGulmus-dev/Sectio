@@ -24,6 +24,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -172,7 +173,7 @@ class ProjectTaskAuthorizationIntegrationTest {
         mvc.perform(post("/api/v1/projects/10/tasks").with(csrf())
                         .contentType("application/json")
                         .content("""
-                                {"assigneeId":3,"title":"Forbidden assignment","description":"","priority":"HIGH","dueAt":null}
+                                {"assigneeIds":[3],"teamIds":[],"allMembers":false,"title":"Forbidden assignment","description":"","priority":"HIGH","dueAt":null}
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_ASSIGNEE"));
@@ -183,7 +184,7 @@ class ProjectTaskAuthorizationIntegrationTest {
     void archivedProjectRejectsTaskChanges() throws Exception {
         authenticate(owner);
         project.archive();
-        Task task = new Task(project, owner, owner, "Archived task", null, TaskPriority.MEDIUM, null);
+        Task task = new Task(project, owner, Set.of(owner), "Archived task", null, TaskPriority.MEDIUM, null);
         ReflectionTestUtils.setField(task, "id", 20L);
         when(tasks.findById(20L)).thenReturn(Optional.of(task));
 
@@ -218,12 +219,13 @@ class ProjectTaskAuthorizationIntegrationTest {
     @EnableWebMvc
     @EnableWebSecurity
     @Import({SecurityConfiguration.class, ApiAuthenticationEntryPoint.class, ApiAccessDeniedHandler.class,
-            PasswordChangeRequiredFilter.class, ProjectController.class, ProjectService.class,
+            PasswordChangeRequiredFilter.class, ProjectController.class, ProjectService.class, ProjectTeamService.class,
             TaskController.class, TaskService.class, ApiExceptionHandler.class})
     static class TestConfiguration {
         @Bean UserRepository userRepository() { return mock(UserRepository.class); }
         @Bean ProjectRepository projectRepository() { return mock(ProjectRepository.class); }
         @Bean ProjectMemberRepository projectMemberRepository() { return mock(ProjectMemberRepository.class); }
+        @Bean ProjectTeamRepository projectTeamRepository() { return mock(ProjectTeamRepository.class); }
         @Bean TaskRepository taskRepository() { return mock(TaskRepository.class); }
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,6 +21,15 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(DisabledException.class)
+    ResponseEntity<ApiErrorResponse> disabledAccount() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiErrorResponse(
+                        "ACCOUNT_DISABLED",
+                        "Hesabınız pasife alındı, yöneticinizle görüşün"
+                ));
+    }
 
     @ExceptionHandler(AuthenticationException.class)
     ResponseEntity<ApiErrorResponse> authenticationFailed() {

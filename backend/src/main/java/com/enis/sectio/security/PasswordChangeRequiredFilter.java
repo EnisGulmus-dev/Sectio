@@ -67,8 +67,8 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(
-                    "{\"code\":\"ACCOUNT_UNAVAILABLE\","
-                            + "\"message\":\"The authenticated account is unavailable\","
+                    "{\"code\":\"ACCOUNT_DISABLED\","
+                            + "\"message\":\"Hesabınız pasife alındı, yöneticinizle görüşün\","
                             + "\"fieldErrors\":{}}"
             );
             return;

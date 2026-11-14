@@ -27,10 +27,11 @@ class ProjectServiceTest {
     @Mock ProjectMemberRepository members;
     @Mock UserRepository users;
     @Mock TaskRepository tasks;
+    @Mock ProjectTeamRepository teams;
     ProjectService service;
 
     @BeforeEach
-    void setup() { service = new ProjectService(projects, members, users, tasks); }
+    void setup() { service = new ProjectService(projects, members, users, tasks, teams); }
 
     @Test
     void ownerBecomesMemberWhenProjectIsCreated() {
@@ -122,7 +123,7 @@ class ProjectServiceTest {
         when(users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(projects.findById(10L)).thenReturn(Optional.of(project));
         when(members.findByProjectIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
-        when(tasks.existsByProjectIdAndAssigneeIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(true);
+        when(tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(true);
 
         assertThatThrownBy(() -> service.removeMember(10L, 2L, admin.getEmail()))
                 .isInstanceOf(ProjectException.class)
@@ -140,10 +141,13 @@ class ProjectServiceTest {
         when(users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(projects.findById(10L)).thenReturn(Optional.of(project));
         when(members.findByProjectIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
-        when(tasks.existsByProjectIdAndAssigneeIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(false);
+        when(tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(false);
 
         service.removeMember(10L, 2L, admin.getEmail());
 
+        verify(tasks).deleteAssigneeReferencesByProjectAndUser(10L, 2L);
+        verify(tasks).deleteTasksWithoutAssignees();
+        verify(teams).deleteMembershipsByProjectAndUser(10L, 2L);
         verify(members).delete(member);
     }
 

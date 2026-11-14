@@ -144,8 +144,16 @@ Ardından aşağıdaki akışı kontrol edin:
    ardından tekrar aktifleştirin.
 8. **Parola** işlemiyle yeni bir geçici parola belirleyin. Kullanıcı bu parolayla
    giriş yaptığında `/change-password` sayfasına yönlendirilmelidir.
-9. Kullanıcı pasifken görünen **Sil** işlemini deneyin. Proje veya görev geçmişi
-   olmayan kullanıcı kalıcı olarak silinir; geçmişi bulunan kullanıcı korunur.
+9. **Sil** işleminde etkilenecek proje üyelikleri ve görev sayılarını kontrol
+   edin. Onaydan sonra üyelikler ve görev atamaları kaldırılır; çalışanı
+   kalmayan görevler otomatik silinir;
+   proje sahipleri önce projelerini devretmeli veya silmelidir.
+
+Proje ayrıntısında **Takım oluştur** ile A Takımı/B Takımı gibi proje kapsamlı
+gruplar tanımlanabilir. Yeni görev panelinde birden fazla çalışan, bir veya daha
+fazla takım ya da **Herkes** seçilebilir. Atamalar çalışan bazında saklandığı
+için aynı kişi birden fazla seçimden gelse bile göreve yalnızca bir kez eklenir.
+Sol menü üstündeki okla daraltılabilir; seçim tarayıcıda korunur.
 
 Koruma kontrolleri:
 

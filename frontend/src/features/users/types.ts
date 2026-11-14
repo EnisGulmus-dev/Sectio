@@ -19,3 +19,11 @@ export type CreateUserInput = {
   role: UserRole;
   jobTitle: JobTitle;
 };
+
+export type UserDeletionImpact = {
+  ownedProjects: number;
+  projectMemberships: number;
+  assignedTasks: number;
+  createdTasks: number;
+  affectedTasks: number;
+};

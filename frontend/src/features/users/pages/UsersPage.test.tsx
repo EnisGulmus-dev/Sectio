@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -30,10 +30,11 @@ describe("UsersPage", () => {
 
     await screen.findByText("Sectio Admin");
     await user.click(screen.getByRole("button", { name: "Kullanıcı ekle" }));
-    await user.type(screen.getByLabelText("Ad soyad"), "Yeni Çalışan");
-    await user.type(screen.getByLabelText("E-posta"), "employee@sectio.local");
-    await user.type(screen.getByLabelText(/^Geçici parola/), "temporary-123");
-    await user.click(screen.getByRole("button", { name: "Kaydet" }));
+    const dialog = screen.getByRole("dialog", { name: "Yeni kullanıcı" });
+    await user.type(within(dialog).getByLabelText("Ad soyad"), "Yeni Çalışan");
+    await user.type(within(dialog).getByLabelText("E-posta"), "employee@sectio.local");
+    await user.type(within(dialog).getByLabelText(/^Geçici parola/), "temporary-123");
+    await user.click(within(dialog).getByRole("button", { name: "Kaydet" }));
 
     expect(await screen.findByText("Yeni Çalışan")).toBeInTheDocument();
     expect(screen.getByText("employee@sectio.local")).toBeInTheDocument();
@@ -54,5 +55,31 @@ describe("UsersPage", () => {
     renderPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Kullanıcı servisi kullanılamıyor");
+  });
+
+  it("shows a popup notification for an incomplete email format", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Sectio Admin");
+    await user.click(screen.getByRole("button", { name: "Kullanıcı ekle" }));
+    const dialog = screen.getByRole("dialog", { name: "Yeni kullanıcı" });
+    await user.type(within(dialog).getByLabelText("Ad soyad"), "Eksik Email");
+    await user.type(within(dialog).getByLabelText("E-posta"), "employee@local");
+    await user.type(within(dialog).getByLabelText(/^Geçici parola/), "temporary-123");
+    await user.click(within(dialog).getByRole("button", { name: "Kaydet" }));
+
+    expect(await screen.findByText(/Geçerli bir e-posta adresi girin/)).toBeInTheDocument();
+  });
+
+  it("can reveal and hide the temporary password", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Sectio Admin");
+    await user.click(screen.getByRole("button", { name: "Kullanıcı ekle" }));
+    const dialog = screen.getByRole("dialog", { name: "Yeni kullanıcı" });
+    const password = within(dialog).getByLabelText(/^Geçici parola/);
+    expect(password).toHaveAttribute("type", "password");
+    await user.click(within(dialog).getByRole("button", { name: "Parolayı göster" }));
+    expect(password).toHaveAttribute("type", "text");
   });
 });

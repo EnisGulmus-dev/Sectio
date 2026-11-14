@@ -16,6 +16,7 @@ describe("ProjectDetailPage", () => {
     render(<MemoryRouter initialEntries={["/projects/10"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Web Projesi" });
+    await user.click(screen.getByRole("button", { name: "Çalışan ekle" }));
     const search = screen.getByRole("combobox", { name: "Eklenecek üyeyi ara" });
     await user.click(search);
     expect(await screen.findByRole("option", { name: /Ada Çalışan/ })).toBeInTheDocument();
@@ -23,7 +24,7 @@ describe("ProjectDetailPage", () => {
     await user.type(search, "ada@");
     expect(screen.getByText(/ada@sectio.local/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("heading", { name: "Web Projesi" }));
+    await user.click(screen.getByRole("heading", { name: "Projeye çalışan ekle" }));
     expect(screen.queryByRole("option", { name: /Ada Çalışan/ })).not.toBeInTheDocument();
 
     await user.click(search);

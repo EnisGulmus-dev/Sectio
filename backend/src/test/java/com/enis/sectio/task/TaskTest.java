@@ -4,6 +4,7 @@ import com.enis.sectio.project.Project;
 import com.enis.sectio.user.Role;
 import com.enis.sectio.user.User;
 import org.junit.jupiter.api.Test;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,7 +13,7 @@ class TaskTest {
     void completionTimestampFollowsDoneStatus() {
         User user = new User("Employee", "employee@test.local", "hash", Role.EMPLOYEE);
         Project project = new Project(user, "Project", null);
-        Task task = new Task(project, user, user, "Task", null, TaskPriority.MEDIUM, null);
+        Task task = new Task(project, user, Set.of(user), "Task", null, TaskPriority.MEDIUM, null);
 
         task.changeStatus(TaskStatus.DONE);
         assertThat(task.getCompletedAt()).isNotNull();

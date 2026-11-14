@@ -22,6 +22,7 @@ export const handlers = [
   http.get("*/api/v1/projects/10/members", () => HttpResponse.json([
     { userId: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "MANAGER", joinedAt: "2026-11-13T10:00:00Z" },
   ])),
+  http.get("*/api/v1/projects/10/teams", () => HttpResponse.json([])),
   http.get("*/api/v1/projects/10/tasks*", () => HttpResponse.json({
     content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true,
   })),

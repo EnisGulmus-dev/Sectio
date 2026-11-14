@@ -6,6 +6,7 @@ import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
 import com.enis.sectio.project.ProjectRepository;
 import com.enis.sectio.project.ProjectMemberRepository;
+import com.enis.sectio.project.ProjectTeamRepository;
 import com.enis.sectio.task.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,12 +35,13 @@ class AdminUserServiceTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private TaskRepository taskRepository;
+    @Mock private ProjectTeamRepository projectTeamRepository;
 
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository);
+        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository, projectTeamRepository);
     }
 
     @Test
@@ -115,9 +117,24 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void deletesInactiveUserWithoutRelatedData() {
+    void deletesUserTogetherWithTasksAndMemberships() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         employee.deactivate();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+
+        service.deleteUser(2L, "admin@sectio.local");
+
+        verify(taskRepository).deleteByCreatedById(2L);
+        verify(taskRepository).deleteAssigneeReferencesByUserId(2L);
+        verify(taskRepository).deleteTasksWithoutAssignees();
+        verify(projectTeamRepository).deleteMembershipsByUserId(2L);
+        verify(projectMemberRepository).deleteByUserId(2L);
+        verify(userRepository).delete(employee);
+    }
+
+    @Test
+    void activeUserCanBeDeletedAfterImpactConfirmation() {
+        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
 
         service.deleteUser(2L, "admin@sectio.local");
@@ -126,27 +143,32 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void activeUserMustBeDeactivatedBeforeDeletion() {
-        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
-
-        assertThatThrownBy(() -> service.deleteUser(2L, "admin@sectio.local"))
-                .isInstanceOf(UserManagementException.class)
-                .extracting(exception -> ((UserManagementException) exception).getCode())
-                .isEqualTo("ACTIVE_USER_DELETION_NOT_ALLOWED");
-    }
-
-    @Test
-    void userWithProjectOrTaskHistoryCannotBeDeleted() {
+    void projectOwnerCannotBeDeleted() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         employee.deactivate();
         when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
-        when(projectMemberRepository.existsByUserId(2L)).thenReturn(true);
+        when(projectRepository.existsByOwnerId(2L)).thenReturn(true);
 
         assertThatThrownBy(() -> service.deleteUser(2L, "admin@sectio.local"))
                 .isInstanceOf(UserManagementException.class)
                 .extracting(exception -> ((UserManagementException) exception).getCode())
-                .isEqualTo("USER_HAS_RELATED_DATA");
+                .isEqualTo("PROJECT_OWNER_DELETION_NOT_ALLOWED");
+    }
+
+    @Test
+    void reportsDeletionImpactBeforeConfirmation() {
+        User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(projectMemberRepository.countByUserId(2L)).thenReturn(2L);
+        when(taskRepository.countDistinctByAssigneesId(2L)).thenReturn(3L);
+        when(taskRepository.countByCreatedById(2L)).thenReturn(1L);
+        when(taskRepository.countByUserReference(2L)).thenReturn(3L);
+
+        var impact = service.deletionImpact(2L);
+
+        assertThat(impact.projectMemberships()).isEqualTo(2);
+        assertThat(impact.assignedTasks()).isEqualTo(3);
+        assertThat(impact.affectedTasks()).isEqualTo(3);
     }
 
     private static User user(String name, String email, Role role) {

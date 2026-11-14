@@ -6,6 +6,7 @@ import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
 import com.enis.sectio.project.ProjectRepository;
 import com.enis.sectio.project.ProjectMemberRepository;
+import com.enis.sectio.project.ProjectTeamRepository;
 import com.enis.sectio.task.TaskRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -24,16 +25,19 @@ public class AdminUserService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final TaskRepository taskRepository;
+    private final ProjectTeamRepository projectTeamRepository;
 
     public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                             ProjectRepository projectRepository,
                             ProjectMemberRepository projectMemberRepository,
-                            TaskRepository taskRepository) {
+                            TaskRepository taskRepository,
+                            ProjectTeamRepository projectTeamRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.taskRepository = taskRepository;
+        this.projectTeamRepository = projectTeamRepository;
     }
 
     @Transactional(readOnly = true)
@@ -136,17 +140,32 @@ public class AdminUserService {
         if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
             throw conflict("SELF_DELETION_NOT_ALLOWED", "You cannot delete your own account");
         }
-        if (user.isActive()) {
-            throw conflict("ACTIVE_USER_DELETION_NOT_ALLOWED", "Deactivate the user before permanent deletion");
+        if (projectRepository.existsByOwnerId(userId)) {
+            throw conflict("PROJECT_OWNER_DELETION_NOT_ALLOWED", "Transfer or delete projects owned by this user first");
         }
-        if (projectRepository.existsByOwnerId(userId)
-                || projectMemberRepository.existsByUserId(userId)
-                || taskRepository.existsByCreatedById(userId)
-                || taskRepository.existsByAssigneeId(userId)) {
-            throw conflict("USER_HAS_RELATED_DATA", "User with project or task history cannot be permanently deleted");
-        }
+        taskRepository.deleteByCreatedById(userId);
+        taskRepository.deleteAssigneeReferencesByUserId(userId);
+        taskRepository.deleteTasksWithoutAssignees();
+        projectTeamRepository.deleteMembershipsByUserId(userId);
+        projectMemberRepository.deleteByUserId(userId);
         userRepository.delete(user);
     }
+
+    @Transactional(readOnly = true)
+    public UserDeletionImpact deletionImpact(Long userId) {
+        findUser(userId);
+        return new UserDeletionImpact(
+                projectRepository.countByOwnerId(userId),
+                projectMemberRepository.countByUserId(userId),
+                taskRepository.countDistinctByAssigneesId(userId),
+                taskRepository.countByCreatedById(userId),
+                taskRepository.countByUserReference(userId)
+        );
+    }
+
+    public record UserDeletionImpact(long ownedProjects, long projectMemberships,
+                                     long assignedTasks, long createdTasks,
+                                     long affectedTasks) {}
 
     private User findUser(Long userId) {
         return userRepository.findById(userId)

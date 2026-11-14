@@ -18,8 +18,8 @@ import java.util.Set;
 
 @Service
 public class ProjectService {
-    private final ProjectRepository projects; private final ProjectMemberRepository members; private final UserRepository users; private final TaskRepository tasks;
-    public ProjectService(ProjectRepository projects, ProjectMemberRepository members, UserRepository users, TaskRepository tasks) { this.projects = projects; this.members = members; this.users = users; this.tasks = tasks; }
+    private final ProjectRepository projects; private final ProjectMemberRepository members; private final UserRepository users; private final TaskRepository tasks; private final ProjectTeamRepository teams;
+    public ProjectService(ProjectRepository projects, ProjectMemberRepository members, UserRepository users, TaskRepository tasks, ProjectTeamRepository teams) { this.projects = projects; this.members = members; this.users = users; this.tasks = tasks; this.teams = teams; }
 
     @Transactional(readOnly = true)
     public PageResponse<ProjectResponse> list(String email, String query, Boolean archived, int page, int size) {
@@ -95,12 +95,21 @@ public class ProjectService {
         Project p = manageable(id, actor(email)); active(p);
         if (p.getOwner().getId().equals(userId)) throw error("OWNER_REMOVAL_NOT_ALLOWED", "Project owner cannot be removed", HttpStatus.CONFLICT);
         ProjectMember member = members.findByProjectIdAndUserId(id, userId).orElseThrow(() -> error("MEMBER_NOT_FOUND", "Project member was not found", HttpStatus.NOT_FOUND));
-        if (tasks.existsByProjectIdAndAssigneeIdAndStatusNotIn(id, userId, List.of(com.enis.sectio.task.TaskStatus.DONE, com.enis.sectio.task.TaskStatus.CANCELLED))) {
+        if (tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(id, userId, List.of(com.enis.sectio.task.TaskStatus.DONE, com.enis.sectio.task.TaskStatus.CANCELLED))) {
             throw error("MEMBER_HAS_ACTIVE_TASKS", "Member cannot be removed while assigned tasks are active", HttpStatus.CONFLICT);
         }
+        tasks.deleteAssigneeReferencesByProjectAndUser(id, userId);
+        tasks.deleteTasksWithoutAssignees();
+        teams.deleteMembershipsByProjectAndUser(id, userId);
         members.delete(member);
     }
     public Project accessibleEntity(Long id, String email) { return accessible(id, actor(email)); }
+    public Project manageableEntity(Long id, String email) { return manageable(id, actor(email)); }
+    public void requireActive(Project project) { active(project); }
+    public List<User> activeMembers(Project project) {
+        return members.findByProjectIdOrderByUserNameAsc(project.getId()).stream()
+                .map(ProjectMember::getUser).filter(User::isActive).toList();
+    }
     public boolean isMember(Project p, User u) { return p.getOwner().getId().equals(u.getId()) || members.existsByProjectIdAndUserId(p.getId(), u.getId()); }
     public User actor(String email) { return users.findByEmail(email).orElseThrow(() -> error("USER_NOT_FOUND", "Authenticated user was not found", HttpStatus.UNAUTHORIZED)); }
     private Project accessible(Long id, User actor) { Project p = find(id); if (actor.getRole() != Role.ADMIN && !isMember(p, actor)) throw error("PROJECT_ACCESS_DENIED", "Project is not accessible", HttpStatus.FORBIDDEN); return p; }

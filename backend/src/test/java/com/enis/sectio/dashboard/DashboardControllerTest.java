@@ -22,9 +22,9 @@ class DashboardControllerTest {
         UserRepository users = mock(UserRepository.class);
         User employee = new User("Employee", "employee@test.local", "hash", Role.EMPLOYEE);
         when(users.findByEmail(employee.getEmail())).thenReturn(Optional.of(employee));
-        when(tasks.countByAssigneeEmailAndStatusNotIn(eq(employee.getEmail()), anyCollection())).thenReturn(3L);
-        when(tasks.countByAssigneeEmailAndStatus(employee.getEmail(), TaskStatus.DONE)).thenReturn(2L);
-        when(tasks.countByAssigneeEmailAndDueAtBeforeAndStatusNotIn(eq(employee.getEmail()), any(Instant.class), anyCollection())).thenReturn(1L);
+        when(tasks.countDistinctByAssigneesEmailAndStatusNotIn(eq(employee.getEmail()), anyCollection())).thenReturn(3L);
+        when(tasks.countDistinctByAssigneesEmailAndStatus(employee.getEmail(), TaskStatus.DONE)).thenReturn(2L);
+        when(tasks.countDistinctByAssigneesEmailAndDueAtBeforeAndStatusNotIn(eq(employee.getEmail()), any(Instant.class), anyCollection())).thenReturn(1L);
 
         var summary = new DashboardController(tasks, users).summary(
                 new UsernamePasswordAuthenticationToken(employee.getEmail(), "ignored"));

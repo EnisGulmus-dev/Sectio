@@ -37,9 +37,9 @@ public class DashboardController {
                     tasks.countByDueAtBeforeAndStatusNotIn(Instant.now(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)));
         }
         return new DashboardSummary(
-                tasks.countByAssigneeEmailAndStatusNotIn(actor.getEmail(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)),
-                tasks.countByAssigneeEmailAndStatus(actor.getEmail(), TaskStatus.DONE),
-                tasks.countByAssigneeEmailAndDueAtBeforeAndStatusNotIn(actor.getEmail(), Instant.now(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)));
+                tasks.countDistinctByAssigneesEmailAndStatusNotIn(actor.getEmail(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)),
+                tasks.countDistinctByAssigneesEmailAndStatus(actor.getEmail(), TaskStatus.DONE),
+                tasks.countDistinctByAssigneesEmailAndDueAtBeforeAndStatusNotIn(actor.getEmail(), Instant.now(), List.of(TaskStatus.DONE, TaskStatus.CANCELLED)));
     }
 
     public record DashboardSummary(long openTasks, long completedTasks, long overdueTasks) {}

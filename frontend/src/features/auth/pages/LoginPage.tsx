@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { isApiClientError } from "../../../shared/api/apiError";
 import { useAuth } from "../useAuth";
+import { PasswordInput } from "../../../shared/ui/PasswordInput";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -83,8 +84,7 @@ export function LoginPage() {
 
             <label>
               <span>Parola</span>
-              <input
-                type="password"
+              <PasswordInput
                 name="password"
                 autoComplete="current-password"
                 value={password}

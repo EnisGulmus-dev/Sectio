@@ -13,6 +13,10 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     Optional<ProjectMember> findByProjectIdAndUserId(Long projectId, Long userId);
     boolean existsByProjectIdAndUserEmail(Long projectId, String email);
     boolean existsByUserId(Long userId);
+    long countByUserId(Long userId);
+    @Modifying
+    @Query("delete from ProjectMember member where member.user.id = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
     @Modifying
     @Query("delete from ProjectMember member where member.project.id = :projectId")
     void deleteByProjectId(@Param("projectId") Long projectId);

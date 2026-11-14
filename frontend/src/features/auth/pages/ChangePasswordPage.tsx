@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { isApiClientError } from "../../../shared/api/apiError";
 import { useAuth } from "../useAuth";
+import { PasswordInput } from "../../../shared/ui/PasswordInput";
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -66,8 +67,7 @@ export function ChangePasswordPage() {
         <form onSubmit={handleSubmit} className="auth-form">
           <label>
             <span>Mevcut parola</span>
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
@@ -77,8 +77,7 @@ export function ChangePasswordPage() {
 
           <label>
             <span>Yeni parola</span>
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -91,8 +90,7 @@ export function ChangePasswordPage() {
 
           <label>
             <span>Yeni parola tekrarı</span>
-            <input
-              type="password"
+            <PasswordInput
               autoComplete="new-password"
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
