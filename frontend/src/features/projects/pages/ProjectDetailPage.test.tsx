@@ -11,11 +11,26 @@ vi.mock("../../auth/useAuth", () => ({
 }));
 
 describe("ProjectDetailPage", () => {
+  it("opens a linked tab and supports keyboard navigation", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/projects/10?tab=tasks"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
+    const tasks = await screen.findByRole("tab", { name: "Görevler" });
+    expect(tasks).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Görevler" })).toBeVisible();
+    tasks.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Takımlar ve üyeler" })).toHaveFocus();
+    expect(screen.getByRole("tabpanel", { name: "Takımlar ve üyeler" })).toBeVisible();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("tabpanel", { name: "Genel bakış" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Çalışan ekle" })).not.toBeInTheDocument();
+  });
   it("supports searching, outside-click close and selecting members", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={["/projects/10"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
 
-    await screen.findByRole("heading", { name: "Web Projesi" });
+    await screen.findByRole("tab", { name: "Genel bakış" });
+    await user.click(screen.getByRole("tab", { name: "Takımlar ve üyeler" }));
     await user.click(screen.getByRole("button", { name: "Çalışan ekle" }));
     const search = screen.getByRole("combobox", { name: "Eklenecek üyeyi ara" });
     await user.click(search);
