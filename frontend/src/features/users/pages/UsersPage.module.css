@@ -1,0 +1,58 @@
+.usersPanel .toolbar {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+}
+.usersPanel .toolbar .searchField { width: min(100%, 380px); }
+.counter { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.listSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--canvas);
+}
+.listSwitch button {
+  min-height: 34px;
+  padding: 6px 13px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.listSwitch button[aria-pressed="true"] {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 7%);
+}
+.listSwitch button:focus-visible,
+.historyAction:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.usersPanel .userActions { flex-wrap: wrap; gap: 6px; }
+.usersPanel .userActions button { min-height: 34px; padding: 6px 10px; border-radius: 8px; font-size: 12px; }
+.usersPanel .historyAction,
+.usersPanel .userActions .historyAction {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.usersPanel .historyAction:hover { border-color: var(--accent); }
+.archivedActions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.archivedActions span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+@media (max-width: 820px) {
+  .usersPanel .toolbar { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .listSwitch { grid-column: 1 / -1; justify-self: start; }
+  .usersPanel .toolbar .searchField { width: 100%; }
+}

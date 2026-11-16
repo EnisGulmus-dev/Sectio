@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <npm.executable>npm</npm.executable>
+        <skipTests>false</skipTests>
     </properties>
 
     <dependencies>
@@ -122,7 +123,7 @@
                             <workingDirectory>${project.basedir}/../frontend</workingDirectory>
                             <executable>${npm.executable}</executable>
                             <arguments>
-                                <argument>install</argument>
+                                <argument>ci</argument>
                                 <argument>--no-audit</argument>
                                 <argument>--no-fund</argument>
                             </arguments>
@@ -150,6 +151,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${skipTests}</skip>
                             <workingDirectory>${project.basedir}/../frontend</workingDirectory>
                             <executable>${npm.executable}</executable>
                             <arguments>

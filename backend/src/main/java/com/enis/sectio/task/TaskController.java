@@ -25,9 +25,10 @@ public class TaskController {
                                     @RequestParam(required = false) TaskStatus status,
                                     @RequestParam(required = false) TaskPriority priority,
                                     @RequestParam(required = false) Long assigneeId,
+                                    @RequestParam(defaultValue = "false") boolean unassigned,
                                     @RequestParam(defaultValue = "0") int page,
                                     @RequestParam(defaultValue = "20") int size) {
-        return service.listProject(projectId, authentication.getName(), query, status, priority, assigneeId, page, size);
+        return service.listProject(projectId, authentication.getName(), query, status, priority, assigneeId, unassigned, page, size);
     }
 
     @PostMapping("/api/v1/projects/{projectId}/tasks")

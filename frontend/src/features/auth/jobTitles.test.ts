@@ -11,6 +11,7 @@ describe("company job titles", () => {
     expect(canCreateProjects("EMPLOYEE", "PROJECT_MANAGER")).toBe(true);
     expect(canCreateProjects("EMPLOYEE", "PROJECT_OWNER")).toBe(true);
     expect(canCreateProjects("ADMIN", "SOFTWARE_DEVELOPER")).toBe(true);
+    expect(canCreateProjects("EMPLOYEE", "CIO")).toBe(false);
   });
 
   it("has a visible Turkish label for every title", () => {
@@ -21,6 +22,7 @@ describe("company job titles", () => {
       "Takım lideri",
       "Proje yöneticisi",
       "Proje sahibi",
+      "Bilgi teknolojileri yöneticisi (CIO)",
     ]);
   });
 });

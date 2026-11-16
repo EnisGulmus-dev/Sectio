@@ -15,7 +15,8 @@ public record AdminUserResponse(
         boolean active,
         boolean mustChangePassword,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant deletedAt
 ) {
     static AdminUserResponse from(User user) {
         return new AdminUserResponse(
@@ -27,7 +28,8 @@ public record AdminUserResponse(
                 user.isActive(),
                 user.isMustChangePassword(),
                 user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                user.getDeletedAt()
         );
     }
 }

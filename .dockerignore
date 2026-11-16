@@ -1,0 +1,15 @@
+.git
+.idea
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules
+**/target
+**/dist
+**/*.tsbuildinfo
+**/*.log
+frontend/vite.config.js
+frontend/vite.config.d.ts
+outputs
+work

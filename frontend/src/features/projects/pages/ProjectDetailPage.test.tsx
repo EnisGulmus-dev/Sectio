@@ -1,16 +1,56 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "../../../shared/ui/ToastProvider";
 import { ProjectDetailPage } from "./ProjectDetailPage";
+import { server } from "../../../test/server";
 
 vi.mock("../../auth/useAuth", () => ({
   useAuth: () => ({ user: { id: 1, name: "Sectio Admin", email: "admin@sectio.local", role: "ADMIN", jobTitle: "PROJECT_MANAGER", mustChangePassword: false } }),
 }));
 
 describe("ProjectDetailPage", () => {
+  it("keeps an unassigned task visible with a reassignment action", async () => {
+    server.use(http.get("*/api/v1/projects/10/tasks", () => HttpResponse.json({
+      content: [{ id: 70, projectId: 10, projectName: "Web Projesi", createdById: 2,
+        createdByName: "Ayrılan Çalışan", assignees: [], title: "Korunan görev", description: null,
+        status: "TODO", priority: "MEDIUM", dueAt: null, completedAt: null,
+        createdAt: "2026-11-16T00:00:00Z", updatedAt: "2026-11-16T00:00:00Z" }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1, first: true, last: true,
+    })));
+    render(<MemoryRouter initialEntries={["/projects/10?tab=tasks"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
+    expect(await screen.findByText("Korunan görev")).toBeInTheDocument();
+    expect(screen.getByText(/^Atanmamış · Son tarih:/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Düzenle" })).toBeEnabled();
+  });
+
+  it("offers a direct unassigned filter and requests only unassigned tasks", async () => {
+    let lastQuery: URLSearchParams | null = null;
+    const unassigned = { id: 70, projectId: 10, projectName: "Web Projesi", createdById: 2,
+      createdByName: "Former", assignees: [], title: "Boştaki iş", description: null,
+      status: "TODO", priority: "MEDIUM", dueAt: null, completedAt: null,
+      createdAt: "2026-11-16T00:00:00Z", updatedAt: "2026-11-16T00:00:00Z" };
+    server.use(http.get("*/api/v1/projects/10/tasks", ({ request }) => {
+      lastQuery = new URL(request.url).searchParams;
+      const content = lastQuery.get("unassigned") === "true" ? [unassigned] : [unassigned,
+        { ...unassigned, id: 71, title: "Atanmış iş", assignees: [{ userId: 1, name: "Admin" }] }];
+      return HttpResponse.json({ content, page: 0, size: 20, totalElements: content.length,
+        totalPages: 1, first: true, last: true });
+    }));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/projects/10?tab=tasks"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
+    await screen.findByText("Atanmış iş");
+    await user.click(screen.getByRole("button", { name: "Atanmamış görevler" }));
+    await waitFor(() => expect(screen.queryByText("Atanmış iş")).not.toBeInTheDocument());
+    expect(screen.getByText("Boştaki iş")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Atanana göre filtrele" })).toHaveValue("unassigned");
+    expect(lastQuery!.get("unassigned")).toBe("true");
+    expect(lastQuery!.has("assigneeId")).toBe(false);
+  });
+
   it("opens a linked tab and supports keyboard navigation", async () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={["/projects/10?tab=tasks"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);

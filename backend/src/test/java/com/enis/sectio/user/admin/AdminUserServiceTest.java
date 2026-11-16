@@ -21,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,12 +37,14 @@ class AdminUserServiceTest {
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private TaskRepository taskRepository;
     @Mock private ProjectTeamRepository projectTeamRepository;
+    @Mock private com.enis.sectio.task.EndedTaskAssignmentRepository workHistory;
+    @Mock private UserWorkTrackingRepository workTracking;
 
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository, projectTeamRepository);
+        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository, projectTeamRepository, workHistory, workTracking);
     }
 
     @Test
@@ -73,7 +76,7 @@ class AdminUserServiceTest {
     @Test
     void preventsAdminFromDeactivatingOwnAccount() {
         User admin = user("Admin", "admin@sectio.local", Role.ADMIN);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(admin));
 
         assertThatThrownBy(() -> service.changeStatus(1L, false, "admin@sectio.local"))
                 .isInstanceOf(UserManagementException.class)
@@ -84,7 +87,7 @@ class AdminUserServiceTest {
     @Test
     void protectsLastActiveAdminFromRoleChange() {
         User admin = user("Admin", "admin@sectio.local", Role.ADMIN);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(admin));
         when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(1L);
 
         assertThatThrownBy(() -> service.updateUser(
@@ -103,7 +106,7 @@ class AdminUserServiceTest {
     void resetPasswordRequiresChangeAtNextLogin() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         employee.changePasswordHash("old-hash");
-        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
         when(passwordEncoder.encode("new-temporary-123")).thenReturn("new-hash");
 
         AdminUserResponse response = service.resetPassword(
@@ -117,42 +120,55 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void deletesUserTogetherWithTasksAndMemberships() {
+    void closesAccessAndRemovesAssignmentsWithoutDeletingUserOrWork() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         employee.deactivate();
-        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
 
         service.deleteUser(2L, "admin@sectio.local");
 
-        verify(taskRepository).deleteByCreatedById(2L);
         verify(taskRepository).deleteAssigneeReferencesByUserId(2L);
-        verify(taskRepository).deleteTasksWithoutAssignees();
         verify(projectTeamRepository).deleteMembershipsByUserId(2L);
         verify(projectMemberRepository).deleteByUserId(2L);
-        verify(userRepository).delete(employee);
+        verify(userRepository, never()).delete(employee);
+        assertThat(employee.isActive()).isFalse();
+        assertThat(employee.getDeletedAt()).isNotNull();
     }
 
     @Test
-    void activeUserCanBeDeletedAfterImpactConfirmation() {
+    void activeUserIsRetainedWithRevokedSessionVersion() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
 
         service.deleteUser(2L, "admin@sectio.local");
 
-        verify(userRepository).delete(employee);
+        verify(userRepository, never()).delete(employee);
+        assertThat(employee.isActive()).isFalse();
+        assertThat(employee.getSessionVersion()).isEqualTo(1);
     }
 
     @Test
-    void projectOwnerCannotBeDeleted() {
+    void ownershipDoesNotPreventAccessClosureOrDeleteTheProject() {
         User employee = user("Employee", "employee@sectio.local", Role.EMPLOYEE);
         employee.deactivate();
-        when(userRepository.findById(2L)).thenReturn(Optional.of(employee));
-        when(projectRepository.existsByOwnerId(2L)).thenReturn(true);
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        service.deleteUser(2L, "admin@sectio.local");
+        assertThat(employee.isActive()).isFalse();
+        verify(userRepository, never()).delete(employee);
+        org.mockito.Mockito.verifyNoInteractions(projectRepository);
+    }
 
+    @Test
+    void lastActiveAdminCannotBeClosedThroughDeleteEndpoint() {
+        User admin = user("Other admin", "other-admin@sectio.local", Role.ADMIN);
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(admin));
+        when(userRepository.countByRoleAndActiveTrue(Role.ADMIN)).thenReturn(1L);
         assertThatThrownBy(() -> service.deleteUser(2L, "admin@sectio.local"))
                 .isInstanceOf(UserManagementException.class)
                 .extracting(exception -> ((UserManagementException) exception).getCode())
-                .isEqualTo("PROJECT_OWNER_DELETION_NOT_ALLOWED");
+                .isEqualTo("LAST_ACTIVE_ADMIN");
+        assertThat(admin.isActive()).isTrue();
+        org.mockito.Mockito.verifyNoInteractions(taskRepository, projectMemberRepository, projectTeamRepository);
     }
 
     @Test
@@ -169,6 +185,33 @@ class AdminUserServiceTest {
         assertThat(impact.projectMemberships()).isEqualTo(2);
         assertThat(impact.assignedTasks()).isEqualTo(3);
         assertThat(impact.affectedTasks()).isEqualTo(3);
+    }
+
+    @Test
+    void deletedUserCannotBeReactivatedOrResetThroughManagementEndpoints() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        employee.deleteAccount();
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        assertThatThrownBy(() -> service.changeStatus(2L, true, "admin@sectio.local"))
+                .isInstanceOf(UserManagementException.class)
+                .extracting(exception -> ((UserManagementException) exception).getCode())
+                .isEqualTo("USER_DELETED");
+        assertThatThrownBy(() -> service.resetPassword(2L, "temporary-123", "admin@sectio.local"))
+                .isInstanceOf(UserManagementException.class);
+        assertThatThrownBy(() -> service.updateUser(2L, "Renamed", Role.ADMIN, JobTitle.CIO, "admin@sectio.local"))
+                .isInstanceOf(UserManagementException.class);
+        assertThat(employee.isActive()).isFalse();
+    }
+
+    @Test
+    void repeatedDeletionDoesNotChangeTheDeletionTime() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        employee.deleteAccount();
+        var deletedAt = employee.getDeletedAt();
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        service.deleteUser(2L, "admin@sectio.local");
+        assertThat(employee.getDeletedAt()).isEqualTo(deletedAt);
+        org.mockito.Mockito.verifyNoInteractions(taskRepository, projectMemberRepository, projectTeamRepository);
     }
 
     private static User user(String name, String email, Role role) {

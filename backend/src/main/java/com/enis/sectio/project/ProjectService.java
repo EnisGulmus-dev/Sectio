@@ -92,11 +92,7 @@ public class ProjectService {
         Project p = manageable(id, actor(email)); active(p);
         if (p.getOwner().getId().equals(userId)) throw error("OWNER_REMOVAL_NOT_ALLOWED", "Project owner cannot be removed", HttpStatus.CONFLICT);
         ProjectMember member = members.findByProjectIdAndUserId(id, userId).orElseThrow(() -> error("MEMBER_NOT_FOUND", "Project member was not found", HttpStatus.NOT_FOUND));
-        if (tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(id, userId, List.of(com.enis.sectio.task.TaskStatus.DONE, com.enis.sectio.task.TaskStatus.CANCELLED))) {
-            throw error("MEMBER_HAS_ACTIVE_TASKS", "Member cannot be removed while assigned tasks are active", HttpStatus.CONFLICT);
-        }
         tasks.deleteAssigneeReferencesByProjectAndUser(id, userId);
-        tasks.deleteTasksWithoutAssignees();
         teams.deleteMembershipsByProjectAndUser(id, userId);
         members.delete(member);
     }

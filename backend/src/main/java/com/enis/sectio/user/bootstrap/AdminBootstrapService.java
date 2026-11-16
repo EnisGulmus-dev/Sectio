@@ -34,7 +34,7 @@ public class AdminBootstrapService {
 
     @Transactional
     public void bootstrapAdmin() {
-        if (userRepository.existsByRole(Role.ADMIN)) {
+        if (userRepository.existsByRoleAndDeletedAtIsNull(Role.ADMIN)) {
             log.info("Admin bootstrap skipped because an admin already exists");
             return;
         }

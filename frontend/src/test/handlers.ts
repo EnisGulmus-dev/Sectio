@@ -8,6 +8,7 @@ export const initialUsers = [
     role: "ADMIN" as const,
     jobTitle: "PROJECT_MANAGER" as const,
     active: true,
+    deletedAt: null,
     mustChangePassword: false,
     createdAt: "2026-11-13T09:00:00Z",
     updatedAt: "2026-11-13T09:00:00Z",

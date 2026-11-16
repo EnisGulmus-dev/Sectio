@@ -136,6 +136,11 @@ paths:
       summary: List users
       security:
         - sessionCookie: []
+      parameters:
+        - name: deleted
+          in: query
+          description: False lists current active/inactive accounts; true lists deleted accounts for read-only history.
+          schema: {type: boolean, default: false}
       responses:
         "200":
           description: Users ordered by name
@@ -202,8 +207,8 @@ paths:
           description: Self-role or last-admin protection rejected the request
     delete:
       tags: [Admin Users]
-      summary: Permanently delete a user and related work assignments
-      description: Self-deletion and deletion of a project owner are forbidden. Memberships and assignments are removed atomically; tasks with no remaining assignee and tasks created by the user are deleted.
+      summary: Delete an account from the current-user list while preserving work history
+      description: Records deletion, disables login and revokes sessions, removes project/team memberships and assignments atomically. Historical identity, authored tasks and ownership remain. Deleted accounts are excluded from the default list and cannot be edited, password-reset or reactivated. Email remains reserved; no restore or physical purge is exposed. Self-deletion and deletion of the last active admin are forbidden. Repeated deletion is idempotent.
       security:
         - sessionCookie: []
       parameters:
@@ -211,18 +216,18 @@ paths:
         - $ref: "#/components/parameters/CsrfHeader"
       responses:
         "204":
-          description: User permanently deleted
+          description: Account deleted from the current-user list; historical work preserved
         "403":
           $ref: "#/components/responses/AccessDenied"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: User is the current admin or owns a project
+          description: User is the current admin or the last active admin
 
   /api/v1/admin/users/{userId}/deletion-impact:
     get:
       tags: [Admin Users]
-      summary: Preview records affected by permanent user deletion
+      summary: Preview memberships and assignments affected by account deletion
       security:
         - sessionCookie: []
       parameters:
@@ -236,6 +241,52 @@ paths:
                 $ref: "#/components/schemas/UserDeletionImpact"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/v1/admin/users/{userId}/work-tracking:
+    get:
+      tags: [Admin Users]
+      summary: Track current and completed assignments without account deletion
+      description: ADMIN-only observation for active, inactive and deleted users. CURRENT entries use live task status and completion time; ENDED entries use preserved snapshots. A task can have multiple assignment episodes, so totals count assignment records rather than distinct tasks. Does not mutate assignments or account state.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+        - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/TaskStatusFilter"
+        - name: scope
+          in: query
+          schema: {type: string, enum: [ALL, CURRENT, ENDED], default: ALL}
+      responses:
+        "200":
+          description: Assignment records ordered by activity time, newest first
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UserWorkTrackingPage"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /api/v1/admin/users/{userId}/work-history:
+    get:
+      tags: [Admin Users]
+      summary: Observe assignments ended by account or project membership removal
+      description: ADMIN-only, read-only history including deleted accounts. Shows task/project names and status as recorded when the assignment ended; it is not a complete audit trail. Assignments removed before tracking began cannot be reconstructed.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: Historical snapshots, newest first
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/UserWorkHistoryPage"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
 
   /api/v1/admin/users/{userId}/status:
     patch:
@@ -458,7 +509,7 @@ paths:
     delete:
       tags: [Projects]
       summary: Remove a project member
-      description: The project owner cannot be removed. An assignee can be removed only when all assigned tasks are DONE or CANCELLED.
+      description: The project owner cannot be removed. Removes membership, team membership and assignments only within this project. Open and completed tasks are preserved; a task with no remaining assignee stays unassigned and can be reassigned. Other projects are unaffected.
       security: [{sessionCookie: []}]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -570,6 +621,7 @@ paths:
         - $ref: "#/components/parameters/TaskStatusFilter"
         - $ref: "#/components/parameters/TaskPriorityFilter"
         - $ref: "#/components/parameters/AssigneeId"
+        - $ref: "#/components/parameters/Unassigned"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:
@@ -578,6 +630,7 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/TaskPage"}
+        "400": {$ref: "#/components/responses/ValidationError"}
         "403": {$ref: "#/components/responses/AccessDenied"}
         "404": {$ref: "#/components/responses/NotFound"}
     post:
@@ -763,6 +816,12 @@ components:
       in: query
       required: false
       schema: {type: integer, format: int64, minimum: 1}
+    Unassigned:
+      name: unassigned
+      in: query
+      required: false
+      description: Only tasks with no assignees. Cannot be combined with assigneeId. Project access rules still apply.
+      schema: {type: boolean, default: false}
     Page:
       name: page
       in: query
@@ -861,7 +920,7 @@ components:
 
     AdminUser:
       type: object
-      required: [id, name, email, role, jobTitle, active, mustChangePassword, createdAt, updatedAt]
+      required: [id, name, email, role, jobTitle, active, mustChangePassword, createdAt, updatedAt, deletedAt]
       properties:
         id:
           type: integer
@@ -885,6 +944,10 @@ components:
           format: date-time
         updatedAt:
           type: string
+          format: date-time
+
+        deletedAt:
+          type: [string, "null"]
           format: date-time
 
     CreateUserRequest:
@@ -927,7 +990,7 @@ components:
     JobTitle:
       type: string
       description: Company job title, separate from the ADMIN/EMPLOYEE security role.
-      enum: [EMPLOYEE, TEAM_LEADER, MANAGER]
+      enum: [SOFTWARE_DEVELOPER, SOFTWARE_ENGINEER, SENIOR_SOFTWARE_ENGINEER, TEAM_LEADER, PROJECT_MANAGER, PROJECT_OWNER, CIO]
 
     ChangeUserStatusRequest:
       type: object
@@ -936,6 +999,58 @@ components:
       properties:
         active:
           type: boolean
+
+    UserWorkTrackingEntry:
+      type: object
+      required: [id, taskId, projectId, taskTitle, projectName, status, assignmentState, activityAt, completedAt, endReason]
+      properties:
+        id: {type: string, description: Stable within the assignment source; current and ended IDs do not collide.}
+        taskId: {type: [integer, "null"], format: int64}
+        projectId: {type: [integer, "null"], format: int64}
+        taskTitle: {type: string}
+        projectName: {type: string}
+        status: {$ref: "#/components/schemas/TaskStatus"}
+        assignmentState: {type: string, enum: [CURRENT, ENDED]}
+        activityAt: {type: string, format: date-time}
+        completedAt: {type: [string, "null"], format: date-time, description: Live task completion time when known; null for ended snapshots.}
+        endReason: {type: [string, "null"], enum: [USER_DELETED, PROJECT_MEMBER_REMOVED, null]}
+
+    UserWorkTrackingPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages, first, last]
+      properties:
+        content: {type: array, items: {$ref: "#/components/schemas/UserWorkTrackingEntry"}}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+        first: {type: boolean}
+        last: {type: boolean}
+
+    UserWorkHistoryEntry:
+      type: object
+      required: [id, taskId, projectId, taskTitle, projectName, statusAtEnd, endedAt, reason]
+      properties:
+        id: {type: integer, format: int64}
+        taskId: {type: [integer, "null"], format: int64}
+        projectId: {type: [integer, "null"], format: int64}
+        taskTitle: {type: string}
+        projectName: {type: string}
+        statusAtEnd: {$ref: "#/components/schemas/TaskStatus"}
+        endedAt: {type: string, format: date-time}
+        reason: {type: string, enum: [USER_DELETED, PROJECT_MEMBER_REMOVED]}
+
+    UserWorkHistoryPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages, first, last]
+      properties:
+        content: {type: array, items: {$ref: "#/components/schemas/UserWorkHistoryEntry"}}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+        first: {type: boolean}
+        last: {type: boolean}
 
     UserDeletionImpact:
       type: object

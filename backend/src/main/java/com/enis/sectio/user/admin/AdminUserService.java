@@ -8,7 +8,9 @@ import com.enis.sectio.project.ProjectRepository;
 import com.enis.sectio.project.ProjectMemberRepository;
 import com.enis.sectio.project.ProjectTeamRepository;
 import com.enis.sectio.task.TaskRepository;
-import org.springframework.data.domain.Sort;
+import com.enis.sectio.task.EndedTaskAssignmentRepository;
+import com.enis.sectio.common.web.PageResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,23 +28,30 @@ public class AdminUserService {
     private final ProjectMemberRepository projectMemberRepository;
     private final TaskRepository taskRepository;
     private final ProjectTeamRepository projectTeamRepository;
+    private final EndedTaskAssignmentRepository workHistory;
+    private final UserWorkTrackingRepository workTracking;
 
     public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                             ProjectRepository projectRepository,
                             ProjectMemberRepository projectMemberRepository,
                             TaskRepository taskRepository,
-                            ProjectTeamRepository projectTeamRepository) {
+                            ProjectTeamRepository projectTeamRepository,
+                            EndedTaskAssignmentRepository workHistory,
+                            UserWorkTrackingRepository workTracking) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.taskRepository = taskRepository;
         this.projectTeamRepository = projectTeamRepository;
+        this.workHistory = workHistory;
+        this.workTracking = workTracking;
     }
 
     @Transactional(readOnly = true)
-    public List<AdminUserResponse> listUsers() {
-        return userRepository.findAll(Sort.by(Sort.Direction.ASC, "name"))
+    public List<AdminUserResponse> listUsers(boolean deleted) {
+        return (deleted ? userRepository.findByDeletedAtIsNotNullOrderByNameAsc()
+                : userRepository.findByDeletedAtIsNullOrderByNameAsc())
                 .stream()
                 .map(AdminUserResponse::from)
                 .toList();
@@ -69,7 +78,7 @@ public class AdminUserService {
             Role role,
             JobTitle jobTitle,
             String currentAdminEmail) {
-        User user = findUser(userId);
+        User user = findManageableUser(userId);
         boolean currentUser = user.getEmail().equals(normalizeEmail(currentAdminEmail));
 
         if (currentUser && user.getRole() != role) {
@@ -94,7 +103,7 @@ public class AdminUserService {
             Long userId,
             boolean active,
             String currentAdminEmail) {
-        User user = findUser(userId);
+        User user = findManageableUser(userId);
         boolean currentUser = user.getEmail().equals(normalizeEmail(currentAdminEmail));
 
         if (!active && currentUser) {
@@ -121,7 +130,7 @@ public class AdminUserService {
             Long userId,
             String temporaryPassword,
             String currentAdminEmail) {
-        User user = findUser(userId);
+        User user = findManageableUser(userId);
         if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
             throw conflict(
                     "SELF_PASSWORD_RESET_NOT_ALLOWED",
@@ -136,19 +145,18 @@ public class AdminUserService {
 
     @Transactional
     public void deleteUser(Long userId, String currentAdminEmail) {
-        User user = findUser(userId);
+        User user = lockUser(userId);
+        if (user.getDeletedAt() != null) return;
         if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
             throw conflict("SELF_DELETION_NOT_ALLOWED", "You cannot delete your own account");
         }
-        if (projectRepository.existsByOwnerId(userId)) {
-            throw conflict("PROJECT_OWNER_DELETION_NOT_ALLOWED", "Transfer or delete projects owned by this user first");
-        }
-        taskRepository.deleteByCreatedById(userId);
+        // Deletion is distinct from temporary deactivation, while the historical
+        // identity remains referenced by authored work and project ownership.
+        changeStatus(userId, false, currentAdminEmail);
+        user.deleteAccount();
         taskRepository.deleteAssigneeReferencesByUserId(userId);
-        taskRepository.deleteTasksWithoutAssignees();
         projectTeamRepository.deleteMembershipsByUserId(userId);
         projectMemberRepository.deleteByUserId(userId);
-        userRepository.delete(user);
     }
 
     @Transactional(readOnly = true)
@@ -167,6 +175,21 @@ public class AdminUserService {
                                      long assignedTasks, long createdTasks,
                                      long affectedTasks) {}
 
+    @Transactional(readOnly = true)
+    public PageResponse<UserWorkHistoryResponse> workHistory(Long userId, int page, int size) {
+        findUser(userId); // Historical identities remain readable, including deleted accounts.
+        return PageResponse.from(workHistory.findByUserIdOrderByEndedAtDescIdDesc(userId,
+                PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)))), UserWorkHistoryResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<UserWorkTrackingEntry> workTracking(Long userId, UserWorkTrackingScope scope,
+            com.enis.sectio.task.TaskStatus status, String query, int page, int size) {
+        findUser(userId); // Active, inactive and deleted identities are all observable by ADMIN.
+        return PageResponse.from(workTracking.find(userId, scope, status, query,
+                PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)))), entry -> entry);
+    }
+
     private User findUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserManagementException(
@@ -174,6 +197,20 @@ public class AdminUserService {
                         "User was not found",
                         HttpStatus.NOT_FOUND
                 ));
+    }
+
+    private User findManageableUser(Long userId) {
+        User user = lockUser(userId);
+        if (user.getDeletedAt() != null) {
+            throw conflict("USER_DELETED", "Deleted accounts cannot be edited or reactivated");
+        }
+        return user;
+    }
+
+    private User lockUser(Long userId) {
+        return userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new UserManagementException(
+                        "USER_NOT_FOUND", "User was not found", HttpStatus.NOT_FOUND));
     }
 
     private static void validatePassword(String password) {

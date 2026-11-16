@@ -6,6 +6,7 @@ export type TaskQuery = {
   status?: TaskStatus | "";
   priority?: TaskPriority | "";
   assigneeId?: number | "";
+  unassigned?: boolean;
   page?: number;
   size?: number;
 };
@@ -16,6 +17,7 @@ function taskQueryString(filters: TaskQuery) {
   if (filters.status) params.set("status", filters.status);
   if (filters.priority) params.set("priority", filters.priority);
   if (filters.assigneeId) params.set("assigneeId", String(filters.assigneeId));
+  if (filters.unassigned) params.set("unassigned", "true");
   params.set("page", String(filters.page ?? 0));
   params.set("size", String(filters.size ?? 20));
   return params.toString();

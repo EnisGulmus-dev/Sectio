@@ -18,7 +18,7 @@ Spring Boot + embedded Tomcat :8080
         +-- /actuator/health  Health endpoint
 ```
 
-Maven runs an idempotent `npm install`, builds the frontend and copies `dist`
+Maven runs lockfile-based `npm ci`, builds the frontend and copies `dist`
 into the backend classpath before compiling Java. Direct client routes without a
 file extension are forwarded to `index.html`; `/api` and `/actuator` are never
 forwarded to React.
@@ -32,6 +32,9 @@ com.enis.sectio
 │   ├── exception        Stable API error contract
 │   └── web              Reusable HTTP models such as PageResponse
 ├── config               Shared Spring beans
+├── dashboard            Summary and current dashboard views
+├── project              Projects, memberships and project teams
+├── task                 Tasks and assignments
 ├── security             Authorization, CSRF and security filters
 ├── user
 │   ├── admin            Admin user-management use cases
@@ -63,6 +66,12 @@ Feature folders own domain-specific code. `shared` contains only behavior that
 can be reused by more than one feature. Components call feature API modules;
 only the shared HTTP client deals with cookies, CSRF headers and error parsing.
 
+The `features/projects` folder also contains project, team and task screens;
+the dashboard currently lives under auth and will be separated incrementally.
+Account/workspace entities are not implemented yet. Accepted decisions and the
+transition sequence are in `decisions/0001-account-workspace-and-deployment.md`
+and `backlog.md`.
+
 ## UI infrastructure
 
 - `ToastProvider`: short-lived success, information and error notifications.
@@ -73,8 +82,10 @@ only the shared HTTP client deals with cookies, CSRF headers and error parsing.
 
 ## Testing
 
-Backend tests use JUnit, Mockito and Testcontainers. Testcontainers tests are
-skipped when Docker is unavailable.
+Backend tests use JUnit, Mockito and Testcontainers. PostgreSQL tests require
+Docker and fail when it is unavailable, including in CI. Maven `verify` runs
+frontend build/tests and backend tests once; `-DskipTests` skips both test runners.
+The prepared, user-run validation sequence is in `validation/first-unit.md`.
 
 Frontend tests use:
 

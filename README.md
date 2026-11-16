@@ -1,5 +1,9 @@
 # Sectio
 
+İlk ADMIN hesabının varsayılan şirket unvanı **Bilgi teknolojileri yöneticisi
+(CIO)** olur. CIO unvanı güvenlik rolünden ayrıdır. Mevcut varsayılan admin
+unvanlarının geçişi ve test sırası: [CIO doğrulaması](docs/validation/admin-cio-title.md).
+
 ## Java standardı
 
 Backend geliştirme, test ve çalıştırma ortamlarında **JDK 21 LTS** kullanır. Projenin
@@ -30,8 +34,8 @@ node --version
 npm --version
 ```
 
-Beklenen ana sürümler `v24` ve `11`'dir. Maven başlangıcında `npm install`
-idempotent olarak çalışır; ardından frontend test/build adımları kullanılabilir.
+Beklenen ana sürümler `v24` ve `11`'dir. Maven başlangıcında `npm ci`
+lockfile üzerinden kurulum yapar; ardından frontend test/build adımları çalışır.
 
 ## Backend - yerel geliştirme
 
@@ -62,9 +66,33 @@ cd backend
 .\mvnw.cmd test
 ```
 
-Hızlı birim testleri Docker gerektirmez. PostgreSQL Testcontainers entegrasyon
-testi Docker uyumlu bir container runtime bulunduğunda otomatik çalışır; runtime
-yoksa test atlanır.
+Tam test komutu çalışan Docker gerektirir; PostgreSQL Testcontainers testleri
+runtime yoksa başarısız olur. Kullanıcının sırayla uygulayacağı ortam, test,
+temiz Docker kurulum ve health adımları [doğrulama rehberindedir](docs/validation/first-unit.md).
+
+## Docker ve CI
+
+`.env.example` dosyasını `.env` olarak kopyala; boş parola değerlerini doldur.
+Compose DB ve backend için aynı `POSTGRES_PASSWORD` değerini kullanır. Yerel
+JVM için `DB_PASSWORD` da bu değere eşit olmalıdır. Bootstrap değerleri ilk
+başlangıçta zorunlu, admin oluştuktan sonra boştur; ilk parola değişimi korunur.
+
+Compose yalnız PostgreSQL ve tek Tomcat uygulaması çalıştırır. Kök dizinden
+`docker compose build backend` frontend'i Node/npm bulunan build aşamasında
+derler ve JAR içine koyar. Runtime imajı yalnız JRE ve uygulamayı içerir.
+`.env` Docker bağlamından dışlanır; bootstrap sırları imaja yazılmaz.
+Uygulama `http://localhost:8080` üzerinde sunulur. `frontend/Dockerfile` eski
+ayrı Nginx dağıtımına aittir; desteklenen Compose akışında kullanılmaz.
+
+PostgreSQL 18 volume hedefi `/var/lib/postgresql` olarak düzeltildi. Eski verili
+volume'a doğrudan uygulamadan önce yedek/restore provası gerekir; temiz kurulum
+için rehberdeki ayrı proje adını kullan. Mevcut volume'u silme.
+
+GitHub Actions, JDK 21/Node 24 ile bir kez Maven `verify` çalıştırır; bu komut
+frontend kontrollerini ve backend/PostgreSQL testlerini kapsar. Ardından testleri
+tekrarlamadan Docker imajı oluşturur ve health/SPA kontrolü yapar. PostgreSQL
+test sınıflarının raporları bulunmalı ve sıfır atlama/hata içermelidir. Workflow
+hazırlandı; bu çalışma kapsamında çalıştırılmadı.
 
 ## Authentication API
 
@@ -85,6 +113,11 @@ Yerel authentication akışı:
 
 CSRF koruması state-changing isteklerde zorunludur. API sözleşmesinin tamamı
 `docs/api/openapi.yaml` dosyasındadır.
+
+Hesap pasifleştirme, rol değişimi ve admin parola sıfırlaması mevcut oturum
+sürümünü geçersiz kılar. Yeniden aktifleştirme eski oturumu geri getirmez;
+yeniden giriş gerekir. Görev koruması ve V10 doğrulaması için
+[B01 rehberini](docs/validation/work-preservation.md) izleyin.
 
 ## Frontend
 
@@ -134,9 +167,10 @@ Ardından aşağıdaki akışı kontrol edin:
 3. Sol menüden **Kullanıcılar** bağlantısını açın veya
    `http://localhost:8080/users` adresine gidin.
 4. **Kullanıcı ekle** ile en az 12 karakterli geçici parola kullanarak bir
-   `EMPLOYEE` hesabı oluşturun ve iş unvanını seçin. `TEAM_LEADER` ile `MANAGER`
-   unvanları proje açabilir; sıradan `EMPLOYEE` yalnızca üye olduğu projelerde
-   görev oluşturabilir.
+   `EMPLOYEE` hesabı oluşturun ve iş unvanını seçin. Mevcut kodda `TEAM_LEADER`,
+   `PROJECT_MANAGER`, `PROJECT_OWNER` unvanları proje açabilir. Görev oluşturma
+   ADMIN veya proje sahibine açıktır; sıradan üyeler kendilerine atanmış görevin
+   durumunu değiştirebilir. Hedef kurallar ve mevcut farklar yetki matrisindedir.
 5. Yeni kaydın listede `Aktif` ve `Değişiklik bekliyor` olarak göründüğünü
    doğrulayın.
 6. **Düzenle** ile adı veya rolü değiştirin.
@@ -144,10 +178,19 @@ Ardından aşağıdaki akışı kontrol edin:
    ardından tekrar aktifleştirin.
 8. **Parola** işlemiyle yeni bir geçici parola belirleyin. Kullanıcı bu parolayla
    giriş yaptığında `/change-password` sayfasına yönlendirilmelidir.
-9. **Sil** işleminde etkilenecek proje üyelikleri ve görev sayılarını kontrol
-   edin. Onaydan sonra üyelikler ve görev atamaları kaldırılır; çalışanı
-   kalmayan görevler otomatik silinir;
-   proje sahipleri önce projelerini devretmeli veya silmelidir.
+9. **Pasifleştir** geçici erişim kapatmadır; üyelik ve atamalar korunur.
+   **Sil** kullanıcıyı normal listeden çıkarır, üyelik/atamalarını kaldırır;
+   oluşturduğu işler ve proje sahipliği korunur. Silinen kullanıcılar ayrı
+   salt okunur listede görülebilir; Aktifleştir ile geri açılamaz.
+   Son atananı kaldırılan görevleri **Projeler → ilgili proje → Görevler →
+   Atanmamış görevler** üzerinden bulup yeniden atayın.
+
+Çalışanın işlerini **Kullanıcılar → ilgili kişi → İş takibi** üzerinden, hesabını
+silmeden izleyin. Mevcut atamalardaki tamamlanmış işler de görünür. **Silinenler**
+liste seçimiyle ayrılan kişinin aynı iş takibi penceresine ulaşılır. Güncel
+atamalar canlı, geçmiş atamalar sonlandırma anındaki bilgilerle gösterilir.
+V12 öncesi kaldırılmış atamalar geri getirilemez.
+[İş takibi doğrulaması](docs/validation/employee-work-tracking.md).
 
 Proje ayrıntısında **Takım oluştur** ile A Takımı/B Takımı gibi proje kapsamlı
 gruplar tanımlanabilir. Yeni görev panelinde birden fazla çalışan, bir veya daha

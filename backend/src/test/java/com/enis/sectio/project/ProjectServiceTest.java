@@ -115,7 +115,7 @@ class ProjectServiceTest {
     }
 
     @Test
-    void memberWithActiveTaskCannotBeRemoved() {
+    void memberRemovalOnlyRemovesAssignmentReferencesWithinTheProject() {
         User admin = user(1L, "admin@test.local", Role.ADMIN);
         User employee = user(2L, "employee@test.local", Role.EMPLOYEE);
         Project project = project(10L, admin, false);
@@ -123,13 +123,10 @@ class ProjectServiceTest {
         when(users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(projects.findById(10L)).thenReturn(Optional.of(project));
         when(members.findByProjectIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
-        when(tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(true);
-
-        assertThatThrownBy(() -> service.removeMember(10L, 2L, admin.getEmail()))
-                .isInstanceOf(ProjectException.class)
-                .extracting(exception -> ((ProjectException) exception).getCode())
-                .isEqualTo("MEMBER_HAS_ACTIVE_TASKS");
-        verify(members, never()).delete(member);
+        service.removeMember(10L, 2L, admin.getEmail());
+        verify(tasks).deleteAssigneeReferencesByProjectAndUser(10L, 2L);
+        verifyNoMoreInteractions(tasks);
+        verify(members).delete(member);
     }
 
     @Test
@@ -141,12 +138,11 @@ class ProjectServiceTest {
         when(users.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(projects.findById(10L)).thenReturn(Optional.of(project));
         when(members.findByProjectIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
-        when(tasks.existsByProjectIdAndAssigneesIdAndStatusNotIn(10L, 2L, List.of(TaskStatus.DONE, TaskStatus.CANCELLED))).thenReturn(false);
 
         service.removeMember(10L, 2L, admin.getEmail());
 
         verify(tasks).deleteAssigneeReferencesByProjectAndUser(10L, 2L);
-        verify(tasks).deleteTasksWithoutAssignees();
+        verifyNoMoreInteractions(tasks);
         verify(teams).deleteMembershipsByProjectAndUser(10L, 2L);
         verify(members).delete(member);
     }

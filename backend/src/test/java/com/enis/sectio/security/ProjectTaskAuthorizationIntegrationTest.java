@@ -85,6 +85,18 @@ class ProjectTaskAuthorizationIntegrationTest {
         mvc.perform(get("/api/v1/projects/10"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PROJECT_ACCESS_DENIED"));
+        mvc.perform(get("/api/v1/projects/10/tasks").param("unassigned", "true"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PROJECT_ACCESS_DENIED"));
+    }
+
+    @Test
+    @WithMockUser(username = OWNER_EMAIL, roles = "EMPLOYEE")
+    void assigneeAndUnassignedFiltersCannotBeCombined() throws Exception {
+        authenticate(owner);
+        mvc.perform(get("/api/v1/projects/10/tasks").param("unassigned", "true").param("assigneeId", "2"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_TASK_FILTER"));
     }
 
     @Test
@@ -269,7 +281,14 @@ class ProjectTaskAuthorizationIntegrationTest {
         verify(members, never()).existsByProjectIdAndUserId(any(), any());
     }
 
-    private void authenticate(User user) { when(users.findByEmail(user.getEmail())).thenReturn(Optional.of(user)); }
+    private void authenticate(User user) {
+        when(users.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+        var principal = new SessionUserDetails(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                        principal, null, principal.getAuthorities()));
+    }
 
     private Task task(Long id, Set<User> assignees) {
         Task task = new Task(project, owner, assignees, "Authorized task", null, TaskPriority.MEDIUM, null);

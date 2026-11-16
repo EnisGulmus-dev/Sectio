@@ -4,7 +4,6 @@ import com.enis.sectio.SectioApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.web.server.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -21,7 +20,7 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class AuthenticationPostgreSqlTest {
 
     private static final Pattern TOKEN_PATTERN = Pattern.compile(
@@ -36,9 +35,9 @@ class AuthenticationPostgreSqlTest {
     void sessionAuthenticationPasswordChangeAndLogoutWorkEndToEnd()
             throws Exception {
         try (ConfigurableApplicationContext context = startApplication()) {
-            int port = context.getBean(
-                    ServletWebServerApplicationContext.class
-            ).getWebServer().getPort();
+            int port = context.getEnvironment().getRequiredProperty(
+                    "local.server.port", Integer.class
+            );
             URI baseUri = URI.create("http://localhost:" + port);
 
             CookieManager cookieManager = new CookieManager(

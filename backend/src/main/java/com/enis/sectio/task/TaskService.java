@@ -33,10 +33,13 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public PageResponse<TaskResponse> listProject(Long projectId, String email, String query, TaskStatus status,
-                                                   TaskPriority priority, Long assigneeId, int page, int size) {
+                                                   TaskPriority priority, Long assigneeId, boolean unassigned, int page, int size) {
         projects.accessibleEntity(projectId, email);
+        if (unassigned && assigneeId != null) {
+            throw error("INVALID_TASK_FILTER", "Unassigned and assignee filters cannot be combined", HttpStatus.BAD_REQUEST);
+        }
         return PageResponse.from(tasks.findProjectTasks(projectId, normalize(query), status, priority, assigneeId,
-                page(page, size)), TaskResponse::from);
+                unassigned, page(page, size)), TaskResponse::from);
     }
 
     @Transactional(readOnly = true)

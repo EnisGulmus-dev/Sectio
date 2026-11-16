@@ -26,12 +26,7 @@ public class DatabaseUserDetailsService implements UserDetailsService {
         ).trim().toLowerCase(Locale.ROOT);
 
         return userRepository.findByEmail(normalizedEmail)
-                .map(user -> org.springframework.security.core.userdetails.User
-                        .withUsername(user.getEmail())
-                        .password(user.getPasswordHash())
-                        .authorities(user.getRole().asAuthority())
-                        .disabled(!user.isActive())
-                        .build())
+                .map(SessionUserDetails::new)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "User not found"
                 ));

@@ -50,7 +50,11 @@ public class AuthService {
     }
 
     private User findUser(String email) {
-        return userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(AuthenticatedUserNotFoundException::new);
+        if (!user.isActive() || user.getDeletedAt() != null) {
+            throw new AuthenticatedUserNotFoundException();
+        }
+        return user;
     }
 }

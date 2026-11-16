@@ -6,7 +6,8 @@ public enum JobTitle {
     SENIOR_SOFTWARE_ENGINEER(false),
     TEAM_LEADER(true),
     PROJECT_MANAGER(true),
-    PROJECT_OWNER(true);
+    PROJECT_OWNER(true),
+    CIO(false);
 
     private final boolean projectCreationAllowed;
 

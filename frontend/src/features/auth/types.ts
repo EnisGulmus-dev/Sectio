@@ -5,7 +5,8 @@ export type JobTitle =
   | "SENIOR_SOFTWARE_ENGINEER"
   | "TEAM_LEADER"
   | "PROJECT_MANAGER"
-  | "PROJECT_OWNER";
+  | "PROJECT_OWNER"
+  | "CIO";
 
 export type CurrentUser = {
   id: number;

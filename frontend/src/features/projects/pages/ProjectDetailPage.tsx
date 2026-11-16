@@ -73,7 +73,9 @@ export function ProjectDetailPage() {
 
   async function loadTasks(page = 0, selectedFilters = filters) {
     const response = await projectsApi.tasks(id, { query: selectedFilters.query, status: selectedFilters.status,
-      priority: selectedFilters.priority, assigneeId: selectedFilters.assigneeId ? Number(selectedFilters.assigneeId) : "", page });
+      priority: selectedFilters.priority,
+      assigneeId: selectedFilters.assigneeId && selectedFilters.assigneeId !== "unassigned" ? Number(selectedFilters.assigneeId) : "",
+      unassigned: selectedFilters.assigneeId === "unassigned", page });
     setTasks(response.content); setTaskPage(response.page); setTaskPages(response.totalPages); setTaskTotal(response.totalElements);
   }
 
@@ -125,7 +127,17 @@ export function ProjectDetailPage() {
   async function updateTask(value: TaskFormValue) {
     if (!editingTask) return;
     setBusy(true);
-    try { const updated = await projectsApi.updateTask(editingTask.id, toTaskInput(value)); setTasks((current) => current.map((item) => item.id === updated.id ? updated : item)); setEditingTask(null); showToast("Görev güncellendi"); return true; }
+    try {
+      const updated = await projectsApi.updateTask(editingTask.id, toTaskInput(value));
+      setTasks((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditingTask(null);
+      showToast("Görev güncellendi");
+      if (filters.assigneeId === "unassigned") {
+        try { await loadTasks(0); }
+        catch (caught) { setError(errorMessage(caught, "Görev kaydedildi, liste yenilenemedi")); }
+      }
+      return true;
+    }
     catch (caught) { setError(errorMessage(caught, "Görev güncellenemedi")); return false; } finally { setBusy(false); }
   }
 
@@ -142,7 +154,10 @@ export function ProjectDetailPage() {
         const member = pendingAction.member; await projectsApi.removeMember(id, member.userId);
         setMembers((current) => current.filter((item) => item.userId !== member.userId));
         setTeams((current) => current.map((team) => ({ ...team, members: team.members.filter((item) => item.userId !== member.userId) })));
-        await loadTasks(taskPage);
+          const nextFilters = filters.assigneeId === String(member.userId)
+            ? { ...filters, assigneeId: "unassigned" } : filters;
+          setFilters(nextFilters);
+          await loadTasks(0, nextFilters);
         setCandidates((current) => [...current, { id: member.userId, name: member.name, email: member.email, role: member.role, jobTitle: member.jobTitle }]); showToast("Üye çıkarıldı");
       } else if (pendingAction.type === "task") {
         await projectsApi.deleteTask(pendingAction.task.id); await loadTasks(taskPage); showToast("Görev silindi");
@@ -162,7 +177,7 @@ export function ProjectDetailPage() {
     ? { title: "Görev silinsin mi?", description: `“${pendingAction.task.title}” kalıcı olarak silinecek.`, label: "Görevi sil" }
     : pendingAction?.type === "team"
       ? { title: "Takım silinsin mi?", description: `“${pendingAction.team.name}” takım başlığı silinecek; çalışanlar projede kalacak.`, label: "Takımı sil" }
-      : { title: "Üye projeden çıkarılsın mı?", description: `${pendingAction?.member.name ?? "Seçilen kullanıcı"} artık bu projeye erişemeyecek.`, label: "Üyeyi çıkar" };
+      : { title: "Üye projeden çıkarılsın mı?", description: `${pendingAction?.member.name ?? "Seçilen kullanıcı"} artık bu projeye erişemeyecek. Bu projedeki görev atamaları kaldırılacak; görevler ve iş geçmişi korunacak. Son atananı kaldırılan görevler atanansız kalacak.`, label: "Üyeyi çıkar" };
 
   return <div className="page-stack project-workspace">
     <nav className="breadcrumb" aria-label="Sayfa yolu"><Link to="/projects">Projeler</Link><span>/</span><span>{project.name}</span></nav>
@@ -198,8 +213,13 @@ export function ProjectDetailPage() {
     <section className="panel workspace-tab-panel task-workspace" role="tabpanel" id="workspace-panel-tasks" aria-labelledby="workspace-tab-tasks" hidden={activeTab !== "tasks"} tabIndex={0}>
       <header className="section-heading"><div><h2>Görev planı</h2><p>Yapılacak işleri atayın, önceliklendirin ve ilerlemeyi takip edin.</p></div><span className="count-badge">{taskTotal} görev</span></header>
       <div className="task-command-bar"><div><strong>Sıradaki işi netleştirin</strong><p>Başlık, sorumlular ve son tarihi belirleyerek ekibin ne yapacağını görünür hale getirin.</p></div>{canManage && !project.archived && <button className="primary-button compact-button" type="button" onClick={() => setShowTaskForm(true)}>+ Yeni görev</button>}</div>
-      <TaskFilters value={filters} members={members} onChange={setFilters} onApply={() => void loadTasks(0)} onClear={() => { setFilters(emptyTaskFilters); void loadTasks(0, emptyTaskFilters); }} />
-      {tasks.length === 0 ? <EmptyState title="Filtreye uygun görev yok" description="Yeni görev oluşturarak ekibin sıradaki işini belirleyin." /> : <div className="task-list">{tasks.map((item) => { const canChangeStatus = canManage || item.assignees.some((assignee) => assignee.userId === user?.id); return <article key={item.id} className={item.dueAt && new Date(item.dueAt) < new Date() && !["DONE", "CANCELLED"].includes(item.status) ? "overdue" : ""}><div className="task-main"><div className="task-title-line"><strong>{item.title}</strong><span className={`priority-badge priority-${item.priority.toLowerCase()}`}>{priorityLabels[item.priority]}</span></div><p>{item.description || "Açıklama yok"}</p><span>{item.assignees.map((assignee) => assignee.name).join(", ")} · Son tarih: {formatDate(item.dueAt)}</span></div><div className="task-actions"><select aria-label={`${item.title} durumu`} value={item.status} disabled={project.archived || !canChangeStatus} onChange={(event) => void changeStatus(item, event.target.value as TaskStatus)}>{Object.entries(statusLabels).map(([status, label]) => <option value={status} key={status}>{label}</option>)}</select>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setEditingTask(item)}>Düzenle</button>}{canManage && !project.archived && <button className="text-button" type="button" onClick={() => setPendingAction({ type: "task", task: item })}>Sil</button>}</div></article>; })}</div>}
+        <button className="secondary-button" type="button" onClick={() => {
+          const nextFilters = { ...emptyTaskFilters, assigneeId: "unassigned" };
+          setFilters(nextFilters);
+          void loadTasks(0, nextFilters).catch((caught) => setError(errorMessage(caught, "Görevler yüklenemedi")));
+        }}>Atanmamış görevler</button>
+        <TaskFilters value={filters} members={members} onChange={setFilters} onApply={() => void loadTasks(0)} onClear={() => { setFilters(emptyTaskFilters); void loadTasks(0, emptyTaskFilters); }} />
+      {tasks.length === 0 ? <EmptyState title="Filtreye uygun görev yok" description="Yeni görev oluşturarak ekibin sıradaki işini belirleyin." /> : <div className="task-list">{tasks.map((item) => { const canChangeStatus = canManage || item.assignees.some((assignee) => assignee.userId === user?.id); return <article key={item.id} className={item.dueAt && new Date(item.dueAt) < new Date() && !["DONE", "CANCELLED"].includes(item.status) ? "overdue" : ""}><div className="task-main"><div className="task-title-line"><strong>{item.title}</strong><span className={`priority-badge priority-${item.priority.toLowerCase()}`}>{priorityLabels[item.priority]}</span></div><p>{item.description || "Açıklama yok"}</p><span>{item.assignees.length > 0 ? item.assignees.map((assignee) => assignee.name).join(", ") : "Atanmamış"} · Son tarih: {formatDate(item.dueAt)}</span></div><div className="task-actions"><select aria-label={`${item.title} durumu`} value={item.status} disabled={project.archived || !canChangeStatus} onChange={(event) => void changeStatus(item, event.target.value as TaskStatus)}>{Object.entries(statusLabels).map(([status, label]) => <option value={status} key={status}>{label}</option>)}</select>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setEditingTask(item)}>Düzenle</button>}{canManage && !project.archived && <button className="text-button" type="button" onClick={() => setPendingAction({ type: "task", task: item })}>Sil</button>}</div></article>; })}</div>}
       {taskPages > 1 && <nav className="pagination" aria-label="Görev sayfaları"><button className="secondary-button" disabled={taskPage === 0} onClick={() => void loadTasks(taskPage - 1)}>Önceki</button><span>{taskPage + 1} / {taskPages}</span><button className="secondary-button" disabled={taskPage + 1 >= taskPages} onClick={() => void loadTasks(taskPage + 1)}>Sonraki</button></nav>}
     </section>
 

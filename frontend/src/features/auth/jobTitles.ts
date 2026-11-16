@@ -7,6 +7,7 @@ export const jobTitleLabels: Record<JobTitle, string> = {
   TEAM_LEADER: "Takım lideri",
   PROJECT_MANAGER: "Proje yöneticisi",
   PROJECT_OWNER: "Proje sahibi",
+  CIO: "Bilgi teknolojileri yöneticisi (CIO)",
 };
 
 export const jobTitleOptions = Object.entries(jobTitleLabels) as [JobTitle, string][];

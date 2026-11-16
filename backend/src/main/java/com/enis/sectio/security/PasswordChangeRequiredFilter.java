@@ -20,7 +20,7 @@ import java.util.Set;
 @Component
 public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
 
-    private static final String API_PREFIX = "/api/v1/";
+    private static final String API_PREFIX = "/api/";
     private static final Set<String> ALLOWED_PATHS = Set.of(
             "/api/v1/auth/csrf",
             "/api/v1/auth/login",
@@ -38,7 +38,7 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return !path.startsWith(API_PREFIX) || ALLOWED_PATHS.contains(path);
+        return !path.startsWith(API_PREFIX);
     }
 
     @Override
@@ -56,10 +56,14 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
             return;
         }
 
-        Optional<User> user = userRepository
-                .findByEmail(authentication.getName());
+        response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
 
-        if (user.isEmpty() || !user.get().isActive()) {
+        SessionUserDetails principal = authentication.getPrincipal() instanceof SessionUserDetails details
+                ? details : null;
+        Optional<User> user = principal == null || principal.getUserId() == null
+                ? Optional.empty() : userRepository.findById(principal.getUserId());
+
+        if (user.isEmpty() || !user.get().isActive() || user.get().getDeletedAt() != null) {
             SecurityContextHolder.clearContext();
             if (request.getSession(false) != null) {
                 request.getSession(false).invalidate();
@@ -71,6 +75,21 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
                             + "\"message\":\"Hesabınız pasife alındı, yöneticinizle görüşün\","
                             + "\"fieldErrors\":{}}"
             );
+            return;
+        }
+
+        if (principal.getSessionVersion() != user.get().getSessionVersion()) {
+            SecurityContextHolder.clearContext();
+            if (request.getSession(false) != null) request.getSession(false).invalidate();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"code\":\"SESSION_REVOKED\","
+                    + "\"message\":\"Oturumunuz sonlandırıldı. Yeniden giriş yapın.\",\"fieldErrors\":{}}");
+            return;
+        }
+
+        if (ALLOWED_PATHS.contains(request.getRequestURI())) {
+            filterChain.doFilter(request, response);
             return;
         }
 

@@ -10,6 +10,8 @@ import type { JobTitle, UserRole } from "../../auth/types";
 import { jobTitleLabels, jobTitleOptions } from "../../auth/jobTitles";
 import { usersApi } from "../api/usersApi";
 import type { CreateUserInput, ManagedUser, UserDeletionImpact } from "../types";
+import { UserWorkTrackingDialog } from "../components/UserWorkTrackingDialog";
+import styles from "./UsersPage.module.css";
 
 const emptyForm: CreateUserInput = {
   name: "",
@@ -29,6 +31,8 @@ export function UsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [historyUser, setHistoryUser] = useState<ManagedUser | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -41,21 +45,16 @@ export function UsersPage() {
   const [deletionImpact, setDeletionImpact] = useState<UserDeletionImpact | null>(null);
   const { showToast } = useToast();
 
-  async function loadUsers() {
+  useEffect(() => {
+    let current = true;
     setLoading(true);
     setError(null);
-    try {
-      setUsers(await usersApi.list());
-    } catch (requestError) {
-      setError(errorMessage(requestError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadUsers();
-  }, []);
+    usersApi.list(showDeleted)
+      .then((result) => { if (current) setUsers(result); })
+      .catch((requestError) => { if (current) setError(errorMessage(requestError)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [showDeleted]);
 
   const filteredUsers = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("tr-TR");
@@ -148,7 +147,7 @@ export function UsersPage() {
     try {
       await usersApi.deleteUser(deleteTarget.id);
       setUsers((current) => current.filter((user) => user.id !== deleteTarget.id));
-      showToast(`${deleteTarget.name} kalıcı olarak silindi.`);
+      showToast(`${deleteTarget.name} silindi; oluşturduğu işler ve görev geçmişi korundu.`);
       setDeleteTarget(null);
       setDeletionImpact(null);
     } catch (requestError) {
@@ -172,9 +171,7 @@ export function UsersPage() {
   }
 
   const deleteDescription = deleteTarget && deletionImpact
-    ? deletionImpact.ownedProjects > 0
-      ? `${deleteTarget.name} ${deletionImpact.ownedProjects} projenin sahibi. Bu projeler devredilmeden veya silinmeden kullanıcı silinemez.`
-      : `${deleteTarget.name} silinecek; ${deletionImpact.projectMemberships} proje üyeliği ve ${deletionImpact.assignedTasks} görev ataması kaldırılacak. Başka çalışanı kalmayan görevler otomatik silinecek. Emin misiniz?`
+    ? `${deleteTarget.name} kullanıcı listesinden kaldırılacak ve tekrar aktifleştirilemeyecek. Oturumları kapatılacak; ${deletionImpact.projectMemberships} proje üyeliği ve ${deletionImpact.assignedTasks} görev ataması kaldırılacak. Oluşturduğu ${deletionImpact.createdTasks} görev, iş geçmişi ve sahibi olduğu ${deletionImpact.ownedProjects} proje korunacak. Son atananı kaldırılan görevler, ilgili projenin Görevler sekmesindeki Atanmamış görevler alanından yeniden atanabilir.`
     : "";
 
   return (
@@ -185,7 +182,7 @@ export function UsersPage() {
           <h1>Kullanıcılar</h1>
           <p>Çalışan hesaplarını, rollerini ve erişim durumlarını yönetin.</p>
         </div>
-        <button className="primary-button compact-button" type="button" aria-haspopup="dialog" onClick={() => setShowCreate(true)}>
+        <button className="primary-button compact-button" type="button" disabled={showDeleted} aria-haspopup="dialog" onClick={() => setShowCreate(true)}>
           Kullanıcı ekle
         </button>
       </header>
@@ -197,7 +194,10 @@ export function UsersPage() {
             <label>Ad soyad<input required maxLength={100} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
             <label>E-posta<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
             <label>Geçici parola<PasswordInput required minLength={12} maxLength={72} value={form.temporaryPassword} onChange={(event) => setForm({ ...form, temporaryPassword: event.target.value })} /><small>12–72 karakter; kullanıcı ilk girişte değiştirecek.</small></label>
-            <label>Rol<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
+            <label>Rol<select value={form.role} onChange={(event) => {
+              const role = event.target.value as UserRole;
+              setForm({ ...form, role, jobTitle: role === "ADMIN" ? "CIO" : "SOFTWARE_DEVELOPER" });
+            }}><option value="EMPLOYEE">Çalışan</option><option value="ADMIN">Yönetici</option></select></label>
             <label>İş unvanı<select value={form.jobTitle} onChange={(event) => setForm({ ...form, jobTitle: event.target.value as JobTitle })}>{jobTitleOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><small>Takım lideri, proje yöneticisi ve proje sahibi proje açabilir.</small></label>
             <button className="primary-button compact-button" type="submit">Kaydet</button>
           </form>
@@ -223,10 +223,14 @@ export function UsersPage() {
         )}
       </ModalPanel>
 
-      <section className="panel table-panel">
-        <div className="table-toolbar">
-          <label className="search-field">Kullanıcı ara<input placeholder="Ad, e-posta veya rol" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-          <span>{filteredUsers.length} kayıt</span>
+      <section className={`panel table-panel ${styles.usersPanel}`}>
+        <div className={`table-toolbar ${styles.toolbar}`}>
+          <label className={`search-field ${styles.searchField}`}>Kullanıcı ara<input placeholder="Ad, e-posta veya rol" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+          <span className={styles.counter}>{filteredUsers.length} kayıt</span>
+          <div className={styles.listSwitch} role="group" aria-label="Kullanıcı listesi">
+            <button type="button" aria-pressed={!showDeleted} onClick={() => setShowDeleted(false)}>Kullanıcılar</button>
+            <button type="button" aria-pressed={showDeleted} onClick={() => setShowDeleted(true)}>Silinenler</button>
+          </div>
         </div>
 
         {loading ? <LoadingState label="Kullanıcılar yükleniyor…" /> : filteredUsers.length === 0 ? <EmptyState title="Eşleşen kullanıcı bulunamadı" description="Arama ifadenizi değiştirip yeniden deneyin." /> : (
@@ -238,9 +242,9 @@ export function UsersPage() {
                   <td><strong>{user.name}</strong><span>{user.email}</span></td>
                   <td>{user.role === "ADMIN" ? "Yönetici" : "Çalışan"}</td>
                   <td>{jobTitleLabels[user.jobTitle]}</td>
-                  <td><span className={`status-label ${user.active ? "active" : "inactive"}`}>{user.active ? "Aktif" : "Pasif"}</span></td>
+                  <td><span className={`status-label ${user.active ? "active" : "inactive"}`}>{user.deletedAt ? "Silindi" : user.active ? "Aktif" : "Pasif"}</span></td>
                   <td>{user.mustChangePassword ? "Değişiklik bekliyor" : "Güncel"}</td>
-                  <td><div className="row-actions"><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button><button className="danger-text" disabled={busyId === user.id} type="button" onClick={() => void prepareDelete(user)}>Sil</button></div></td>
+                  <td>{user.deletedAt ? <div className={styles.archivedActions}><span>Silinmiş hesap</span><button className={styles.historyAction} type="button" onClick={() => setHistoryUser(user)}>İş takibi</button></div> : <div className={`row-actions ${styles.userActions}`}><button className={styles.historyAction} type="button" onClick={() => setHistoryUser(user)}>İş takibi</button><button type="button" onClick={() => setEditing(user)}>Düzenle</button><button disabled={busyId === user.id} type="button" onClick={() => setStatusTarget(user)}>{user.active ? "Pasifleştir" : "Aktifleştir"}</button><button type="button" onClick={() => setResetting(user)}>Parola</button><button className="danger-text" disabled={busyId === user.id} type="button" onClick={() => void prepareDelete(user)}>Sil</button></div>}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -248,6 +252,7 @@ export function UsersPage() {
         )}
       </section>
 
+      <UserWorkTrackingDialog key={historyUser?.id ?? "closed"} user={historyUser} onClose={() => setHistoryUser(null)} />
       <ConfirmDialog
         open={statusTarget !== null}
         title={statusTarget?.active ? "Kullanıcı pasifleştirilsin mi?" : "Kullanıcı aktifleştirilsin mi?"}
@@ -259,7 +264,7 @@ export function UsersPage() {
       />
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Kullanıcı kalıcı olarak silinsin mi?"
+        title="Kullanıcı silinsin mi?"
         description={deleteDescription}
         confirmLabel="Kullanıcıyı sil"
         tone="danger"

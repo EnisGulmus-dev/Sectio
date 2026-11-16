@@ -2,6 +2,7 @@ package com.enis.sectio.user.bootstrap;
 
 import com.enis.sectio.SectioApplication;
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class AdminBootstrapPostgreSqlTest {
 
     @Container
@@ -33,6 +34,7 @@ class AdminBootstrapPostgreSqlTest {
 
             assertThat(repository.count()).isEqualTo(1);
             assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
+            assertThat(admin.getJobTitle()).isEqualTo(JobTitle.CIO);
             assertThat(admin.isActive()).isTrue();
             assertThat(admin.isMustChangePassword()).isTrue();
             assertThat(admin.getPasswordHash()).startsWith("$2");
@@ -45,12 +47,14 @@ class AdminBootstrapPostgreSqlTest {
                     .getBean(UserRepository.class);
 
             assertThat(repository.count()).isEqualTo(1);
+            assertThat(repository.findByEmail("admin@example.com").orElseThrow().getJobTitle())
+                    .isEqualTo(JobTitle.CIO);
             repository.deleteAll();
         }
 
         assertThatThrownBy(() -> startApplication("", "", ""))
-                .hasRootCauseInstanceOf(IllegalStateException.class)
-                .hasStackTraceContaining(
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(
                         "ADMIN_BOOTSTRAP_NAME must be configured when no admin exists"
                 );
     }
@@ -60,8 +64,9 @@ class AdminBootstrapPostgreSqlTest {
             String adminEmail,
             String adminPassword) {
         return new SpringApplicationBuilder(SectioApplication.class)
-                .web(WebApplicationType.NONE)
+                .web(WebApplicationType.SERVLET)
                 .run(
+                        "--server.port=0",
                         "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                         "--spring.datasource.username=" + POSTGRES.getUsername(),
                         "--spring.datasource.password=" + POSTGRES.getPassword(),

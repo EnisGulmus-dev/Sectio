@@ -10,6 +10,7 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,15 +38,16 @@ class PasswordChangeRequiredFilterTest {
                 Role.ADMIN
         );
         filter = new PasswordChangeRequiredFilter(userRepository);
+        ReflectionTestUtils.setField(admin, "id", 1L);
 
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.authenticated(
-                        "admin@example.com",
+                        new SessionUserDetails(admin),
                         "password-hash",
                         List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
                 )
         );
-        when(userRepository.findByEmail("admin@example.com"))
+        when(userRepository.findById(1L))
                 .thenReturn(Optional.of(admin));
     }
 
@@ -113,5 +115,42 @@ class PasswordChangeRequiredFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication())
                 .isNull();
         assertThat(session.isInvalid()).isTrue();
+    }
+
+    @Test
+    void reactivatingAccountDoesNotReviveOldSessionOnMeEndpoint() throws Exception {
+        admin.deactivate();
+        admin.activate();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/auth/me");
+        MockHttpSession session = (MockHttpSession) request.getSession(true);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(request, response, chain);
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString()).contains("SESSION_REVOKED");
+        assertThat(session.isInvalid()).isTrue();
+        assertThat(chain.getRequest()).isNull();
+    }
+
+    @Test
+    void inactiveAccountCannotUsePasswordChangeEndpoint() throws Exception {
+        admin.deactivate();
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/change-password");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, new MockFilterChain());
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString()).contains("ACCOUNT_DISABLED");
+    }
+
+    @Test
+    void previousAdminSessionCannotKeepAdminAuthorityAfterDemotion() throws Exception {
+        admin.changeRole(Role.EMPLOYEE);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/admin/users");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(request, response, chain);
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString()).contains("SESSION_REVOKED");
+        assertThat(chain.getRequest()).isNull();
     }
 }

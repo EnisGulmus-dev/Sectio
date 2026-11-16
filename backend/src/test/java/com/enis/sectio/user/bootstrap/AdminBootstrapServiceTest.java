@@ -1,6 +1,7 @@
 package com.enis.sectio.user.bootstrap;
 
 import com.enis.sectio.user.Role;
+import com.enis.sectio.user.JobTitle;
 import com.enis.sectio.user.User;
 import com.enis.sectio.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ class AdminBootstrapServiceTest {
 
     @Test
     void createsAnActiveAdminWithNormalizedEmailAndHashedPassword() {
-        when(userRepository.existsByRole(Role.ADMIN)).thenReturn(false);
+        when(userRepository.existsByRoleAndDeletedAtIsNull(Role.ADMIN)).thenReturn(false);
         when(userRepository.findByEmail("admin@example.com"))
                 .thenReturn(Optional.empty());
         when(passwordEncoder.encode("temporary-password"))
@@ -61,13 +62,14 @@ class AdminBootstrapServiceTest {
         assertThat(admin.getEmail()).isEqualTo("admin@example.com");
         assertThat(admin.getPasswordHash()).isEqualTo("hashed-password");
         assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(admin.getJobTitle()).isEqualTo(JobTitle.CIO);
         assertThat(admin.isActive()).isTrue();
         assertThat(admin.isMustChangePassword()).isTrue();
     }
 
     @Test
     void doesNotCreateASecondAdminWhenBootstrapRunsAgain() {
-        when(userRepository.existsByRole(Role.ADMIN))
+        when(userRepository.existsByRoleAndDeletedAtIsNull(Role.ADMIN))
                 .thenReturn(false, true);
         when(userRepository.findByEmail("admin@example.com"))
                 .thenReturn(Optional.empty());
@@ -86,7 +88,7 @@ class AdminBootstrapServiceTest {
     void rejectsMissingBootstrapValuesWhenNoAdminExists(
             String expectedProperty,
             Consumer<AdminBootstrapProperties> removeProperty) {
-        when(userRepository.existsByRole(Role.ADMIN)).thenReturn(false);
+        when(userRepository.existsByRoleAndDeletedAtIsNull(Role.ADMIN)).thenReturn(false);
         removeProperty.accept(properties);
 
         assertThatThrownBy(service::bootstrapAdmin)
@@ -98,7 +100,7 @@ class AdminBootstrapServiceTest {
 
     @Test
     void rejectsWeakBootstrapPassword() {
-        when(userRepository.existsByRole(Role.ADMIN)).thenReturn(false);
+        when(userRepository.existsByRoleAndDeletedAtIsNull(Role.ADMIN)).thenReturn(false);
         properties.setPassword("short");
 
         assertThatThrownBy(service::bootstrapAdmin)

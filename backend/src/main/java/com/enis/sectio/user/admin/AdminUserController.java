@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -32,8 +33,8 @@ public class AdminUserController {
     }
 
     @GetMapping
-    List<AdminUserResponse> listUsers() {
-        return adminUserService.listUsers();
+    List<AdminUserResponse> listUsers(@RequestParam(defaultValue = "false") boolean deleted) {
+        return adminUserService.listUsers(deleted);
     }
 
     @PostMapping
@@ -73,6 +74,22 @@ public class AdminUserController {
     @GetMapping("/{userId}/deletion-impact")
     AdminUserService.UserDeletionImpact deletionImpact(@PathVariable Long userId) {
         return adminUserService.deletionImpact(userId);
+    }
+
+    @GetMapping("/{userId}/work-history")
+    com.enis.sectio.common.web.PageResponse<UserWorkHistoryResponse> workHistory(
+            @PathVariable Long userId, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return adminUserService.workHistory(userId, page, size);
+    }
+
+    @GetMapping("/{userId}/work-tracking")
+    com.enis.sectio.common.web.PageResponse<UserWorkTrackingEntry> workTracking(
+            @PathVariable Long userId, @RequestParam(defaultValue = "ALL") UserWorkTrackingScope scope,
+            @RequestParam(required = false) com.enis.sectio.task.TaskStatus status,
+            @RequestParam(defaultValue = "") String query, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return adminUserService.workTracking(userId, scope, status, query, page, size);
     }
 
     @PostMapping("/{userId}/reset-password")

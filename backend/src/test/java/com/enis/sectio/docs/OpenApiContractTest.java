@@ -33,6 +33,8 @@ class OpenApiContractTest {
                 "/api/v1/auth/me",
                 "/api/v1/auth/change-password",
                 "/api/v1/auth/logout",
+                "/api/v1/admin/users/{userId}/work-history",
+                "/api/v1/admin/users/{userId}/work-tracking",
                 "/api/v1/projects",
                 "/api/v1/projects/{projectId}",
                 "/api/v1/projects/{projectId}/restore",
@@ -45,7 +47,8 @@ class OpenApiContractTest {
         );
         assertThat(schemas).containsKeys(
                 "Project", "ProjectPage", "ProjectMember", "Task", "TaskPage",
-                "TaskInput", "TaskStatusInput", "DashboardSummary", "ApiError"
+                "TaskInput", "TaskStatusInput", "DashboardSummary", "ApiError",
+                "UserWorkHistoryEntry", "UserWorkHistoryPage", "UserWorkTrackingEntry", "UserWorkTrackingPage"
         );
         assertThat(parameters).containsKeys(
                 "ProjectId", "TaskId", "Page", "Size", "TaskStatusFilter", "TaskPriorityFilter"

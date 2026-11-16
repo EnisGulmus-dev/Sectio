@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "users")
 public class User {
     @Id
@@ -35,6 +36,12 @@ public class User {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    @Column(name = "session_version", nullable = false)
+    private long sessionVersion;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
@@ -52,7 +59,7 @@ public class User {
         this.email = normalizeEmail(email);
         this.passwordHash = requireNonBlank(passwordHash, "passwordHash");
         this.role = Objects.requireNonNull(role, "role must not be null");
-        this.jobTitle = JobTitle.SOFTWARE_DEVELOPER;
+        this.jobTitle = role == Role.ADMIN ? JobTitle.CIO : JobTitle.SOFTWARE_DEVELOPER;
         this.active = true;
         this.mustChangePassword = true;
     }
@@ -100,6 +107,12 @@ public class User {
         return active;
     }
 
+    public long getSessionVersion() {
+        return sessionVersion;
+    }
+
+    public Instant getDeletedAt() { return deletedAt; }
+
     public boolean isMustChangePassword() {
         return mustChangePassword;
     }
@@ -129,10 +142,13 @@ public class User {
     public void resetPasswordHash(String passwordHash) {
         this.passwordHash = requireNonBlank(passwordHash, "passwordHash");
         this.mustChangePassword = true;
+        this.sessionVersion++;
     }
 
     public void changeRole(Role role) {
-        this.role = Objects.requireNonNull(role, "role must not be null");
+        Role nextRole = Objects.requireNonNull(role, "role must not be null");
+        if (this.role != nextRole) sessionVersion++;
+        this.role = nextRole;
     }
 
     public void changeJobTitle(JobTitle jobTitle) {
@@ -140,11 +156,20 @@ public class User {
     }
 
     public void activate() {
+        if (deletedAt != null) throw new IllegalStateException("Deleted accounts cannot be activated");
         this.active = true;
     }
 
     public void deactivate() {
+        // Persist revocation so reactivation cannot revive previously issued sessions.
+        if (active) sessionVersion++;
         this.active = false;
+    }
+
+    public void deleteAccount() {
+        if (deletedAt != null) return;
+        deactivate();
+        deletedAt = Instant.now();
     }
 
     private static String normalizeEmail(String email) {

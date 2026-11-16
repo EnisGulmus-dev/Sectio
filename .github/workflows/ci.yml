@@ -1,0 +1,87 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Require Docker for PostgreSQL tests
+        run: docker info > /dev/null
+      - name: Frontend build and tests, backend and PostgreSQL tests
+        working-directory: backend
+        run: bash mvnw -B -ntp verify
+      - name: Require executed PostgreSQL test suites
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          reports = Path('backend/target/surefire-reports')
+          suites = (
+              'com.enis.sectio.auth.AuthenticationPostgreSqlTest',
+              'com.enis.sectio.user.bootstrap.AdminBootstrapPostgreSqlTest',
+              'com.enis.sectio.user.CioJobTitlePostgreSqlTest',
+              'com.enis.sectio.task.WorkPreservationPostgreSqlTest',
+          )
+          for suite in suites:
+              report = reports / f'TEST-{suite}.xml'
+              if not report.is_file():
+                  raise SystemExit(f'Missing PostgreSQL test report: {suite}')
+              result = ET.parse(report).getroot()
+              if int(result.get('tests', '0')) < 1:
+                  raise SystemExit(f'No PostgreSQL tests executed: {suite}')
+              for outcome in ('skipped', 'failures', 'errors'):
+                  if int(result.get(outcome, '0')) != 0:
+                      raise SystemExit(f'PostgreSQL suite has {outcome}: {suite}')
+              print(f'PostgreSQL suite executed successfully: {suite}')
+          PY
+      - name: Publish test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+      - name: Build and smoke test single Tomcat deployment
+        env:
+          POSTGRES_PASSWORD: ci-database-password
+          POSTGRES_PORT: '55432'
+          ADMIN_BOOTSTRAP_NAME: CI Administrator
+          ADMIN_BOOTSTRAP_EMAIL: ci@example.com
+          ADMIN_BOOTSTRAP_PASSWORD: ci-temporary-password
+        run: |
+          docker compose config --quiet
+          docker compose up -d --build
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["status"] == "UP"'; then
+              curl -fsS http://localhost:8080/ | grep -q '<div id="root"'
+              curl -fsS http://localhost:8080/login | grep -q '<div id="root"'
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
+      - name: Stop smoke test containers
+        if: always()
+        env:
+          POSTGRES_PASSWORD: ci-database-password
+        run: docker compose down
