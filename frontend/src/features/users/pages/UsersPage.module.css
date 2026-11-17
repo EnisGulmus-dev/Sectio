@@ -49,8 +49,14 @@
   white-space: nowrap;
 }
 .usersPanel .historyAction:hover { border-color: var(--accent); }
-.archivedActions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.archivedActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.usersPanel .archivedActions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 12px; white-space: nowrap; }
+.usersPanel .archivedActions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.usersPanel .archivedActions :global(.danger-text) { color: var(--danger); }
 .archivedActions span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.orgTeams { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.orgTeams label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.orgTeams label input { width: 16px; height: 16px; min-height: 16px; margin: 0; }
 @media (max-width: 820px) {
   .usersPanel .toolbar { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
   .listSwitch { grid-column: 1 / -1; justify-self: start; }

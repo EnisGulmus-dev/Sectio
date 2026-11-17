@@ -15,6 +15,9 @@ import { UsersPage } from "../features/users/pages/UsersPage";
 import { ProjectsPage } from "../features/projects/pages/ProjectsPage";
 import { ProjectDetailPage } from "../features/projects/pages/ProjectDetailPage";
 import { MyTasksPage } from "../features/projects/pages/MyTasksPage";
+import { ProfilePage } from "../features/profile/ProfilePage";
+import { ChannelsPage } from "../features/channels/ChannelsPage";
+import { OrganizationPage } from "../features/organization/OrganizationPage";
 import { ErrorBoundary } from "../shared/ui/ErrorBoundary";
 import { ToastProvider } from "../shared/ui/ToastProvider";
 import { NotFoundPage } from "./NotFoundPage";
@@ -39,6 +42,9 @@ export function App() {
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
                 <Route path="/my-tasks" element={<MyTasksPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/channels" element={<ChannelsPage />} />
+                <Route path="/organization" element={<OrganizationPage />} />
                 <Route element={<RequireAdminRoute />}>
                   <Route path="/users" element={<UsersPage />} />
                 </Route>

@@ -1,0 +1,14 @@
+.picker { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.picker legend { padding: 0 6px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.toolbar input { flex: 1; min-width: 0; }
+.toolbar > span { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+.people { display: grid; gap: 8px; max-height: 230px; overflow-y: auto; }
+.picker .person { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); cursor: pointer; }
+.picker .person:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.picker .person input { width: 16px; height: 16px; min-height: 16px; flex: 0 0 auto; margin: 0; padding: 0; accent-color: var(--accent); }
+.person > span { display: grid; min-width: 0; gap: 3px; }
+.person strong { color: var(--ink); font-size: 13px; }
+.person small { overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
+.help, .empty { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+@media (max-width: 540px) { .toolbar { align-items: stretch; flex-direction: column; } }

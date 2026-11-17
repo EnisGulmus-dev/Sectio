@@ -42,6 +42,9 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
@@ -112,6 +115,7 @@ public class User {
     }
 
     public Instant getDeletedAt() { return deletedAt; }
+    public Instant getPurgedAt() { return purgedAt; }
 
     public boolean isMustChangePassword() {
         return mustChangePassword;
@@ -131,7 +135,9 @@ public class User {
     }
 
     public void setEmail(String email) {
-        this.email = normalizeEmail(email);
+        String next = normalizeEmail(email);
+        if (!this.email.equals(next)) sessionVersion++;
+        this.email = next;
     }
 
     public void changePasswordHash(String passwordHash) {
@@ -170,6 +176,27 @@ public class User {
         if (deletedAt != null) return;
         deactivate();
         deletedAt = Instant.now();
+    }
+
+    public void restoreAccount(String temporaryPasswordHash) {
+        if (deletedAt == null || purgedAt != null) throw new IllegalStateException("Account cannot be restored");
+        resetPasswordHash(temporaryPasswordHash);
+        deletedAt = null;
+        active = true;
+    }
+
+    public void purgeAccount(String unusablePasswordHash) {
+        if (deletedAt == null) throw new IllegalStateException("Only deleted accounts can be purged");
+        if (purgedAt != null) return;
+        name = "Silinmiş kullanıcı #" + id;
+        email = "purged-" + java.util.UUID.randomUUID() + "@deleted.invalid";
+        passwordHash = requireNonBlank(unusablePasswordHash, "passwordHash");
+        role = Role.EMPLOYEE;
+        jobTitle = JobTitle.SOFTWARE_DEVELOPER;
+        active = false;
+        mustChangePassword = true;
+        sessionVersion++;
+        purgedAt = Instant.now();
     }
 
     private static String normalizeEmail(String email) {

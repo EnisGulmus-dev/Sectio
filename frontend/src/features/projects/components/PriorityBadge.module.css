@@ -1,0 +1,13 @@
+.badge { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 5px 9px; border: 1px solid var(--priority-border); border-radius: 7px; color: var(--priority-text); background: var(--priority-bg); font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+.dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+/* Project task rows style all spans; keep the shared badge identical in both views. */
+:global(.task-list) .badge { display: inline-flex; margin: 0; color: var(--priority-text); font-size: 11px; }
+:global(.task-list) .dot { display: block; margin: 0; color: inherit; }
+.badge[data-priority="LOW"] { --priority-text: #475569; --priority-bg: #eef2f6; --priority-border: #cbd5e1; }
+.badge[data-priority="MEDIUM"] { --priority-text: #1d4ed8; --priority-bg: #e8f1ff; --priority-border: #adc8ff; }
+.badge[data-priority="HIGH"] { --priority-text: #92400e; --priority-bg: #fff4db; --priority-border: #f2c66b; }
+.badge[data-priority="CRITICAL"] { --priority-text: #9f1239; --priority-bg: #fff0f3; --priority-border: #efacbf; }
+:global([data-theme="midnight"]) .badge[data-priority="LOW"] { --priority-text: #cbd5e1; --priority-bg: #203044; --priority-border: #465b73; }
+:global([data-theme="midnight"]) .badge[data-priority="MEDIUM"] { --priority-text: #9ac6ff; --priority-bg: #17365c; --priority-border: #3d70ad; }
+:global([data-theme="midnight"]) .badge[data-priority="HIGH"] { --priority-text: #ffd089; --priority-bg: #49351b; --priority-border: #a8762f; }
+:global([data-theme="midnight"]) .badge[data-priority="CRITICAL"] { --priority-text: #ffb4c7; --priority-bg: #4c2230; --priority-border: #a5526d; }

@@ -315,5 +315,6 @@ class ProjectTaskAuthorizationIntegrationTest {
         @Bean ProjectMemberRepository projectMemberRepository() { return mock(ProjectMemberRepository.class); }
         @Bean ProjectTeamRepository projectTeamRepository() { return mock(ProjectTeamRepository.class); }
         @Bean TaskRepository taskRepository() { return mock(TaskRepository.class); }
+        @Bean TaskHandoffHistoryRepository taskHandoffHistoryRepository() { return mock(TaskHandoffHistoryRepository.class); }
     }
 }

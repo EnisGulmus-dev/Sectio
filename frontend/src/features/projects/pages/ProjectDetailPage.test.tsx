@@ -13,6 +13,24 @@ vi.mock("../../auth/useAuth", () => ({
 }));
 
 describe("ProjectDetailPage", () => {
+  it("keeps the selected task group when switching project tabs", async () => {
+    const buckets: string[] = [];
+    server.use(http.get("*/api/v1/projects/10/tasks", ({ request }) => {
+      buckets.push(new URL(request.url).searchParams.get("bucket")!);
+      return HttpResponse.json({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true });
+    }));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/projects/10?tab=tasks"]}><ToastProvider><Routes><Route path="/projects/:projectId" element={<ProjectDetailPage />} /></Routes></ToastProvider></MemoryRouter>);
+    await screen.findByRole("tab", { name: "Görevler" });
+    await user.click(screen.getByRole("button", { name: "Tamamlanan görevler" }));
+    await waitFor(() => expect(buckets.at(-1)).toBe("COMPLETED"));
+    await user.click(screen.getByRole("tab", { name: "Takımlar ve üyeler" }));
+    await user.click(screen.getByRole("tab", { name: "Görevler" }));
+    expect(screen.getByRole("button", { name: "Tamamlanan görevler" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("combobox", { name: "Duruma göre filtrele" }).querySelector('option[value="TODO"]')).toBeNull();
+    await user.click(screen.getByRole("button", { name: "İptal edilen görevler" }));
+    await waitFor(() => expect(buckets.at(-1)).toBe("CANCELLED"));
+  });
   it("keeps an unassigned task visible with a reassignment action", async () => {
     server.use(http.get("*/api/v1/projects/10/tasks", () => HttpResponse.json({
       content: [{ id: 70, projectId: 10, projectName: "Web Projesi", createdById: 2,
@@ -46,9 +64,13 @@ describe("ProjectDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "Atanmamış görevler" }));
     await waitFor(() => expect(screen.queryByText("Atanmış iş")).not.toBeInTheDocument());
     expect(screen.getByText("Boştaki iş")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Atanana göre filtrele" })).toHaveValue("unassigned");
+    expect(screen.getByRole("button", { name: "Atanmamış görevler" })).toHaveAttribute("aria-pressed", "true");
     expect(lastQuery!.get("unassigned")).toBe("true");
+    expect(lastQuery!.get("bucket")).toBe("ALL");
     expect(lastQuery!.has("assigneeId")).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Aktif görevler" }));
+    expect(await screen.findByText("Atanmış iş")).toBeInTheDocument();
+    expect(lastQuery!.get("unassigned")).not.toBe("true");
   });
 
   it("opens a linked tab and supports keyboard navigation", async () => {

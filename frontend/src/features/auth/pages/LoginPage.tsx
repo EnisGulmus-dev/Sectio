@@ -21,7 +21,7 @@ export function LoginPage() {
     setSubmitting(true);
 
     try {
-      const user = await login({ email, password });
+      const user = await login({ email: email.trim().toLowerCase(), password });
       navigate(user.mustChangePassword ? "/change-password" : "/", {
         replace: true,
       });
@@ -74,7 +74,12 @@ export function LoginPage() {
             <label>
               <span>Email address</span>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={255}
                 name="email"
                 autoComplete="email"
                 value={email}

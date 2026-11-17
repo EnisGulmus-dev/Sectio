@@ -1,0 +1,19 @@
+.card { display: grid; gap: 24px; max-width: 850px; }
+.identity { display: flex; align-items: center; gap: 16px; }
+.identity h2, .identity p { margin: 0; }
+.identity p, .card section p { color: var(--muted); }
+.avatar { display: grid; place-items: center; width: 82px; height: 82px; flex: 0 0 auto; border-radius: 50%; background: var(--accent-soft); color: var(--ink); font-size: 28px; overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.section { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.section h2 { margin: 0; font-size: 16px; }
+.section p { margin: 5px 0 0; font-size: 13px; }
+.details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 0; }
+.details div { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.details dt { color: var(--muted); font-size: 12px; }
+.details dd { margin: 5px 0 0; color: var(--ink); overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.photoActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.photoActions span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.upload { position: relative; display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--paper); cursor: pointer; }
+.upload:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.upload input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+@media (max-width: 520px) { .details { grid-template-columns: 1fr; } }

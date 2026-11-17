@@ -6,8 +6,13 @@ doğrulama: `validation/admin-cio-title.md`.
 
 Son kullanıcı düzeltmesi: Pasifleştir geçici erişim kapatmadır ve atamaları
 korur. Sil ayrı bir durumdur; normal kullanıcı listesinden kaldırır, üyelik ve
-atamaları sonlandırır, geçmiş işleri korur. Silinen hesap salt okunur geçmiş
-görünümünde yer alır; aktifleştirme ile geri açılamaz. Atanansız görevler proje
+atamaları sonlandırır, geçmiş işleri korur. Silinen hesap geçmiş
+görünümünde yer alır; normal aktifleştirme ile geri açılamaz. Ayrı Geri yükle
+işlemi yeni geçici parola ister; eski atamaları otomatik açmaz. Silinenler'den
+Kalıcı sil, kişisel hesap alanlarını anonimleştirir ve listeden kaldırır;
+iş kayıtları korunur, hesap geri yüklenemez, e-posta yeniden kullanılabilir.
+Yeni ve düzenlenen e-posta adresleri ASCII karakterlerle sınırlandırılır; form içinde hata gösterilir.
+Doğrulama: `validation/user-recovery-and-purge.md`. Atanansız görevler proje
 Görevler sekmesinde açık bir filtre ve kısayolla bulunabilir. Ayrıntı:
 `validation/account-deletion-and-unassigned.md`.
 
@@ -79,6 +84,19 @@ uygulama durumu `backlog.md` ve `api/authorization-matrix.md` içinde ayrıdır.
   CI entegrasyonu sessizce atlayamaz. Güvenlik/yedekleme/gözlemlenebilirlik erkenden
   ele alınır. Sırlar log/çıktı/commit'e taşınmaz. Yeni bağımlılık resmi kaynakla
   gerekçelendirilir. Gereksinim, backlog, OpenAPI, yetki ve ADR güncel tutulur.
+
+## 2026-11-17 — Proje kişileri ve görev görünümleri
+
+Yeni proje formunda ilk çalışanlar seçilir; proje ve üyelikler atomik kaydedilir.
+Takımlar proje içinde bir kez oluşturulur ve birden fazla göreve tekrar atanır.
+V13 kalıcı görev-takım ilişkisini ekler; eski kişi atamalarından takım tahmini
+yapılmaz. Bitirilmiş/tamamlanmış DONE görevleri ile iptal edilenler ayrı
+görünümdedir; varsayılan görev listesi TODO ve IN_PROGRESS içerir. Kişisel
+görünümün erişim kapsamı mevcut kişi atamalarıyla sınırlı kalır. Öncelik rozetleri
+iki temaya uyarlanır; koyu modun dar menüsünde S amblemi beyaz gösterilir.
+
+Kararlar: `decisions/0006-project-people-reusable-teams-and-task-groups.md`.
+Kullanıcının çalıştıracağı kontroller: `validation/project-task-workflow.md`.
 
 ## Başlangıç bulguları (kaynak kodu incelemesi)
 

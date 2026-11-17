@@ -45,6 +45,8 @@ export type CreateUserInput = {
   temporaryPassword: string;
   role: UserRole;
   jobTitle: JobTitle;
+  managerId?: number | null;
+  teamIds?: number[];
 };
 
 export type UserDeletionImpact = {

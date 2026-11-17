@@ -10,16 +10,19 @@ import java.time.Instant;
 import java.util.Collection;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
-    @Query(value = "select distinct t from Task t left join t.assignees a where t.project.id=:projectId and (:query='' or lower(t.title) like lower(concat('%',:query,'%'))) and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority) and (:assigneeId is null or a.id=:assigneeId) and (:unassigned=false or t.assignees is empty)",
-            countQuery = "select count(distinct t.id) from Task t left join t.assignees a where t.project.id=:projectId and (:query='' or lower(t.title) like lower(concat('%',:query,'%'))) and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority) and (:assigneeId is null or a.id=:assigneeId) and (:unassigned=false or t.assignees is empty)")
+    java.util.List<Task> findByPredecessorIdOrderByCreatedAtAsc(Long predecessorId);
+    @Query(value = "select distinct t from Task t left join t.assignees a where t.project.id=:projectId and (:query='' or lower(t.title) like lower(concat('%',:query,'%'))) and t.status in :allowedStatuses and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority) and (:assigneeId is null or a.id=:assigneeId) and (:unassigned=false or (t.assignees is empty and t.targetTeams is empty))",
+            countQuery = "select count(distinct t.id) from Task t left join t.assignees a where t.project.id=:projectId and (:query='' or lower(t.title) like lower(concat('%',:query,'%'))) and t.status in :allowedStatuses and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority) and (:assigneeId is null or a.id=:assigneeId) and (:unassigned=false or (t.assignees is empty and t.targetTeams is empty))")
     Page<Task> findProjectTasks(@Param("projectId") Long projectId, @Param("query") String query, @Param("status") TaskStatus status,
                                 @Param("priority") TaskPriority priority, @Param("assigneeId") Long assigneeId,
-                                @Param("unassigned") boolean unassigned, Pageable pageable);
+                                @Param("unassigned") boolean unassigned,
+                                @Param("allowedStatuses") Collection<TaskStatus> allowedStatuses, Pageable pageable);
 
-    @Query(value = "select distinct t from Task t join t.assignees a where a.email=:email and (:query='' or lower(t.title) like lower(concat('%',:query,'%')) or lower(t.project.name) like lower(concat('%',:query,'%'))) and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority)",
-            countQuery = "select count(distinct t.id) from Task t join t.assignees a where a.email=:email and (:query='' or lower(t.title) like lower(concat('%',:query,'%')) or lower(t.project.name) like lower(concat('%',:query,'%'))) and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority)")
+    @Query(value = "select distinct t from Task t join t.assignees a where a.email=:email and (:query='' or lower(t.title) like lower(concat('%',:query,'%')) or lower(t.project.name) like lower(concat('%',:query,'%'))) and t.status in :allowedStatuses and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority)",
+            countQuery = "select count(distinct t.id) from Task t join t.assignees a where a.email=:email and (:query='' or lower(t.title) like lower(concat('%',:query,'%')) or lower(t.project.name) like lower(concat('%',:query,'%'))) and t.status in :allowedStatuses and (:status is null or t.status=:status) and (:priority is null or t.priority=:priority)")
     Page<Task> findAssignedTasks(@Param("email") String email, @Param("query") String query, @Param("status") TaskStatus status,
-                                 @Param("priority") TaskPriority priority, Pageable pageable);
+                                 @Param("priority") TaskPriority priority,
+                                 @Param("allowedStatuses") Collection<TaskStatus> allowedStatuses, Pageable pageable);
 
     long countByStatusNotIn(Collection<TaskStatus> statuses); long countByStatus(TaskStatus status);
     long countByDueAtBeforeAndStatusNotIn(Instant due, Collection<TaskStatus> statuses);

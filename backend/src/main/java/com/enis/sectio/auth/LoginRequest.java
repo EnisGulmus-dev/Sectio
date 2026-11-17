@@ -13,4 +13,7 @@ public record LoginRequest(
         @Size(max = 72, message = "Password must not exceed 72 characters")
         String password
 ) {
+    public LoginRequest {
+        if (email != null) email = email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
 }

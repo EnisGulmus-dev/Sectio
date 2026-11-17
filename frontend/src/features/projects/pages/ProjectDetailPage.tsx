@@ -11,8 +11,11 @@ import { jobTitleLabels } from "../../auth/jobTitles";
 import { projectsApi } from "../api/projectsApi";
 import { emptyTaskFilters, TaskFilters, type TaskFilterValue } from "../components/TaskFilters";
 import { TaskForm, toTaskInput, type TaskFormValue } from "../components/TaskForm";
-import { formatDate, priorityLabels, statusLabels, toLocalDateTime } from "../projectFormat";
-import type { Project, ProjectMember, ProjectMemberCandidate, ProjectTeam, Task, TaskStatus } from "../types";
+import { formatDate, toLocalDateTime } from "../projectFormat";
+import type { Project, ProjectMember, ProjectMemberCandidate, ProjectTeam, Task, TaskBucket } from "../types";
+import { TaskBucketSwitch, readTaskBucket, taskBucketLabels, type TaskView } from "../components/TaskBucketSwitch";
+import { PriorityBadge } from "../components/PriorityBadge";
+import { TaskDetailDialog } from "../components/TaskDetailDialog";
 
 type PendingAction =
   | { type: "member"; member: ProjectMember }
@@ -31,6 +34,9 @@ export function ProjectDetailPage() {
   const id = Number(useParams().projectId);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = workspaceTabs.find((tab) => tab.id === searchParams.get("tab"))?.id ?? "overview";
+  const view: TaskView = searchParams.get("bucket") === "UNASSIGNED" ? "UNASSIGNED" : readTaskBucket(searchParams.get("bucket"));
+  const bucket: TaskBucket = view === "UNASSIGNED" ? "ALL" : view;
+  const taskRequest = useRef(0);
   function selectTab(tab: WorkspaceTab) {
     setSearchParams((current) => { const next = new URLSearchParams(current); next.set("tab", tab); return next; });
   }
@@ -48,10 +54,13 @@ export function ProjectDetailPage() {
   const [candidateQuery, setCandidateQuery] = useState("");
   const [candidateResultsOpen, setCandidateResultsOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [taskLoading, setTaskLoading] = useState(true);
+  const [taskError, setTaskError] = useState<string | null>(null);
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -71,20 +80,39 @@ export function ProjectDetailPage() {
 
   function errorMessage(caught: unknown, fallback: string) { return isApiClientError(caught) ? caught.message : fallback; }
 
-  async function loadTasks(page = 0, selectedFilters = filters) {
-    const response = await projectsApi.tasks(id, { query: selectedFilters.query, status: selectedFilters.status,
+  async function loadTasks(page = 0, selectedFilters = filters, selectedBucket: TaskBucket = bucket) {
+    const current = ++taskRequest.current;
+    setTaskLoading(true); setTaskError(null);
+    try {
+      const response = await projectsApi.tasks(id, { query: selectedFilters.query, status: selectedFilters.status,
       priority: selectedFilters.priority,
       assigneeId: selectedFilters.assigneeId && selectedFilters.assigneeId !== "unassigned" ? Number(selectedFilters.assigneeId) : "",
-      unassigned: selectedFilters.assigneeId === "unassigned", page });
-    setTasks(response.content); setTaskPage(response.page); setTaskPages(response.totalPages); setTaskTotal(response.totalElements);
+      unassigned: selectedFilters.assigneeId === "unassigned", bucket: selectedBucket, page });
+      if (current !== taskRequest.current) return;
+      setTasks(response.content); setTaskPage(response.page); setTaskPages(response.totalPages); setTaskTotal(response.totalElements);
+    } catch (caught) {
+      if (current === taskRequest.current) {
+        setTasks([]); setTaskTotal(0); setTaskPages(0);
+        setTaskError(errorMessage(caught, "Görevler yüklenemedi"));
+      }
+    }
+    finally { if (current === taskRequest.current) setTaskLoading(false); }
+  }
+
+  useEffect(() => { const next = view === "UNASSIGNED" ? { ...emptyTaskFilters, assigneeId: "unassigned" } : emptyTaskFilters; setFilters(next); void loadTasks(0, next, bucket); return () => { taskRequest.current++; }; }, [id, view]);
+
+  function selectBucket(next: TaskView) {
+    const nextFilters = next === "UNASSIGNED" ? { ...emptyTaskFilters, assigneeId: "unassigned" } : emptyTaskFilters;
+    setFilters(nextFilters);
+    if (next === view) void loadTasks(0, nextFilters, next === "UNASSIGNED" ? "ALL" : next);
+    setSearchParams((current) => { const params = new URLSearchParams(current); params.set("bucket", next); return params; });
   }
 
   useEffect(() => {
-    Promise.all([projectsApi.get(id), projectsApi.members(id), projectsApi.teams(id), projectsApi.tasks(id)])
-      .then(async ([loadedProject, loadedMembers, loadedTeams, loadedTasks]) => {
+    Promise.all([projectsApi.get(id), projectsApi.members(id), projectsApi.teams(id)])
+      .then(async ([loadedProject, loadedMembers, loadedTeams]) => {
         setProject(loadedProject); setProjectForm({ name: loadedProject.name, description: loadedProject.description ?? "" });
-        setMembers(loadedMembers); setTeams(loadedTeams); setTasks(loadedTasks.content); setTaskPage(loadedTasks.page);
-        setTaskPages(loadedTasks.totalPages); setTaskTotal(loadedTasks.totalElements);
+        setMembers(loadedMembers); setTeams(loadedTeams);
         if (!loadedProject.archived && (user?.role === "ADMIN" || user?.id === loadedProject.ownerId)) setCandidates(await projectsApi.memberCandidates(id));
       })
       .catch((caught) => setError(errorMessage(caught, "Proje yüklenemedi")))
@@ -120,7 +148,13 @@ export function ProjectDetailPage() {
 
   async function createTask(value: TaskFormValue) {
     setBusy(true);
-    try { await projectsApi.createTask(id, toTaskInput(value)); await loadTasks(0); setShowTaskForm(false); showToast("Görev oluşturuldu"); return true; }
+    try {
+      await projectsApi.createTask(id, toTaskInput(value));
+      setFilters(emptyTaskFilters);
+      if (bucket === "ACTIVE") await loadTasks(0, emptyTaskFilters, "ACTIVE");
+      setSearchParams((current) => { const params = new URLSearchParams(current); params.set("tab", "tasks"); params.set("bucket", "ACTIVE"); return params; });
+      setShowTaskForm(false); showToast("Görev oluşturuldu"); return true;
+    }
     catch (caught) { setError(errorMessage(caught, "Görev oluşturulamadı")); return false; } finally { setBusy(false); }
   }
 
@@ -132,18 +166,10 @@ export function ProjectDetailPage() {
       setTasks((current) => current.map((item) => item.id === updated.id ? updated : item));
       setEditingTask(null);
       showToast("Görev güncellendi");
-      if (filters.assigneeId === "unassigned") {
-        try { await loadTasks(0); }
-        catch (caught) { setError(errorMessage(caught, "Görev kaydedildi, liste yenilenemedi")); }
-      }
+      await loadTasks(0);
       return true;
     }
     catch (caught) { setError(errorMessage(caught, "Görev güncellenemedi")); return false; } finally { setBusy(false); }
-  }
-
-  async function changeStatus(item: Task, status: TaskStatus) {
-    try { const updated = await projectsApi.status(item.id, status); setTasks((current) => current.map((task) => task.id === updated.id ? updated : task)); showToast("Görev durumu güncellendi"); }
-    catch (caught) { setError(errorMessage(caught, "Durum güncellenemedi")); }
   }
 
   async function confirmAction() {
@@ -162,7 +188,7 @@ export function ProjectDetailPage() {
       } else if (pendingAction.type === "task") {
         await projectsApi.deleteTask(pendingAction.task.id); await loadTasks(taskPage); showToast("Görev silindi");
       } else {
-        await projectsApi.deleteTeam(id, pendingAction.team.id); setTeams((current) => current.filter((team) => team.id !== pendingAction.team.id)); showToast("Takım silindi");
+        await projectsApi.deleteTeam(id, pendingAction.team.id); setTeams((current) => current.filter((team) => team.id !== pendingAction.team.id)); await loadTasks(0); showToast("Takım silindi");
       }
       setPendingAction(null);
     } catch (caught) { setError(errorMessage(caught, "İşlem tamamlanamadı")); } finally { setBusy(false); }
@@ -177,13 +203,13 @@ export function ProjectDetailPage() {
     ? { title: "Görev silinsin mi?", description: `“${pendingAction.task.title}” kalıcı olarak silinecek.`, label: "Görevi sil" }
     : pendingAction?.type === "team"
       ? { title: "Takım silinsin mi?", description: `“${pendingAction.team.name}” takım başlığı silinecek; çalışanlar projede kalacak.`, label: "Takımı sil" }
-      : { title: "Üye projeden çıkarılsın mı?", description: `${pendingAction?.member.name ?? "Seçilen kullanıcı"} artık bu projeye erişemeyecek. Bu projedeki görev atamaları kaldırılacak; görevler ve iş geçmişi korunacak. Son atananı kaldırılan görevler atanansız kalacak.`, label: "Üyeyi çıkar" };
+      : { title: "Üye projeden çıkarılsın mı?", description: `${pendingAction?.member.name ?? "Seçilen kullanıcı"} artık bu projeye erişemeyecek. Bu projedeki görev atamaları kaldırılacak; görevler ve iş geçmişi korunacak. Kayıtlı takım bağlantısı da bulunmayan görevler atanansız kalacak.`, label: "Üyeyi çıkar" };
 
   return <div className="page-stack project-workspace">
     <nav className="breadcrumb" aria-label="Sayfa yolu"><Link to="/projects">Projeler</Link><span>/</span><span>{project.name}</span></nav>
     <header className="page-header"><div><p className="eyebrow">Proje çalışma alanı</p><h1>{project.name}</h1><p>{project.description || "Bu proje için henüz açıklama eklenmedi."}</p></div><div className="header-meta"><span className={`status-label ${project.archived ? "inactive" : "active"}`}>{project.archived ? "Arşiv" : "Aktif"}</span><small>Güncellendi: {formatDate(project.updatedAt)}</small></div></header>
     {error && <InlineAlert message={error} />}
-    <section className="summary-strip" aria-label="Proje özeti"><div><strong>{members.length}</strong><span>üye</span></div><div><strong>{teams.length}</strong><span>takım</span></div><div><strong>{taskTotal}</strong><span>görev</span></div><div><strong>{project.ownerName}</strong><span>proje sahibi</span></div></section>
+    <section className="summary-strip" aria-label="Proje özeti"><div><strong>{members.length}</strong><span>üye</span></div><div><strong>{teams.length}</strong><span>takım</span></div><div><strong>{taskTotal}</strong><span>gösterilen görev</span></div><div><strong>{project.ownerName}</strong><span>proje sahibi</span></div></section>
 
     <div className="workspace-tabs" role="tablist" aria-label="Proje çalışma alanı">
       {workspaceTabs.map((tab, index) => <button key={tab.id} id={`workspace-tab-${tab.id}`} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={`workspace-panel-${tab.id}`} tabIndex={activeTab === tab.id ? 0 : -1} onClick={() => selectTab(tab.id)} onKeyDown={(event) => {
@@ -213,17 +239,16 @@ export function ProjectDetailPage() {
     <section className="panel workspace-tab-panel task-workspace" role="tabpanel" id="workspace-panel-tasks" aria-labelledby="workspace-tab-tasks" hidden={activeTab !== "tasks"} tabIndex={0}>
       <header className="section-heading"><div><h2>Görev planı</h2><p>Yapılacak işleri atayın, önceliklendirin ve ilerlemeyi takip edin.</p></div><span className="count-badge">{taskTotal} görev</span></header>
       <div className="task-command-bar"><div><strong>Sıradaki işi netleştirin</strong><p>Başlık, sorumlular ve son tarihi belirleyerek ekibin ne yapacağını görünür hale getirin.</p></div>{canManage && !project.archived && <button className="primary-button compact-button" type="button" onClick={() => setShowTaskForm(true)}>+ Yeni görev</button>}</div>
-        <button className="secondary-button" type="button" onClick={() => {
-          const nextFilters = { ...emptyTaskFilters, assigneeId: "unassigned" };
-          setFilters(nextFilters);
-          void loadTasks(0, nextFilters).catch((caught) => setError(errorMessage(caught, "Görevler yüklenemedi")));
-        }}>Atanmamış görevler</button>
-        <TaskFilters value={filters} members={members} onChange={setFilters} onApply={() => void loadTasks(0)} onClear={() => { setFilters(emptyTaskFilters); void loadTasks(0, emptyTaskFilters); }} />
-      {tasks.length === 0 ? <EmptyState title="Filtreye uygun görev yok" description="Yeni görev oluşturarak ekibin sıradaki işini belirleyin." /> : <div className="task-list">{tasks.map((item) => { const canChangeStatus = canManage || item.assignees.some((assignee) => assignee.userId === user?.id); return <article key={item.id} className={item.dueAt && new Date(item.dueAt) < new Date() && !["DONE", "CANCELLED"].includes(item.status) ? "overdue" : ""}><div className="task-main"><div className="task-title-line"><strong>{item.title}</strong><span className={`priority-badge priority-${item.priority.toLowerCase()}`}>{priorityLabels[item.priority]}</span></div><p>{item.description || "Açıklama yok"}</p><span>{item.assignees.length > 0 ? item.assignees.map((assignee) => assignee.name).join(", ") : "Atanmamış"} · Son tarih: {formatDate(item.dueAt)}</span></div><div className="task-actions"><select aria-label={`${item.title} durumu`} value={item.status} disabled={project.archived || !canChangeStatus} onChange={(event) => void changeStatus(item, event.target.value as TaskStatus)}>{Object.entries(statusLabels).map(([status, label]) => <option value={status} key={status}>{label}</option>)}</select>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setEditingTask(item)}>Düzenle</button>}{canManage && !project.archived && <button className="text-button" type="button" onClick={() => setPendingAction({ type: "task", task: item })}>Sil</button>}</div></article>; })}</div>}
-      {taskPages > 1 && <nav className="pagination" aria-label="Görev sayfaları"><button className="secondary-button" disabled={taskPage === 0} onClick={() => void loadTasks(taskPage - 1)}>Önceki</button><span>{taskPage + 1} / {taskPages}</span><button className="secondary-button" disabled={taskPage + 1 >= taskPages} onClick={() => void loadTasks(taskPage + 1)}>Sonraki</button></nav>}
+        <TaskBucketSwitch value={view} onChange={selectBucket} disabled={busy} includeUnassigned />
+        <h2>{view === "UNASSIGNED" ? "Atanmamış görevler" : taskBucketLabels[view]}</h2>
+        <TaskFilters value={filters} members={view === "UNASSIGNED" ? undefined : members} bucket={bucket} disabled={busy} onChange={setFilters} onApply={() => void loadTasks(0)} onClear={() => { const next = view === "UNASSIGNED" ? { ...emptyTaskFilters, assigneeId: "unassigned" } : emptyTaskFilters; setFilters(next); void loadTasks(0, next); }} />
+        {taskError && <InlineAlert message={taskError} />}
+      {taskLoading ? <LoadingState label="Görevler yükleniyor…" /> : tasks.length === 0 ? <EmptyState title="Filtreye uygun görev yok" description="Yeni görev oluşturarak ekibin sıradaki işini belirleyin." /> : <div className="task-list">{tasks.map((item) => { const canChangeStatus = canManage || item.assignees.some((assignee) => assignee.userId === user?.id); return <article key={item.id} className={item.dueAt && new Date(item.dueAt) < new Date() && !["DONE", "CANCELLED"].includes(item.status) ? "overdue" : ""}><div className="task-main"><div className="task-title-line"><strong>{item.title}</strong><PriorityBadge priority={item.priority} /></div><p>{item.description || "Açıklama yok"}</p><span>{(item.teams ?? []).length > 0 ? `Takım: ${item.teams.map((team) => team.name).join(", ")} · ${item.assignees.length} kişi` : item.assignees.length > 0 ? item.assignees.map((assignee) => assignee.name).join(", ") : "Atanmamış"} · Son tarih: {formatDate(item.dueAt)}</span></div><div className="task-actions"><button className="secondary-button" type="button" onClick={() => setDetailTask(item)}>Görev detayını aç</button>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setEditingTask(item)}>Düzenle</button>}{canManage && !project.archived && <button className="text-button" type="button" onClick={() => setPendingAction({ type: "task", task: item })}>Sil</button>}</div></article>; })}</div>}
+      {taskPages > 1 && <nav className="pagination" aria-label="Görev sayfaları"><button className="secondary-button" disabled={busy || taskLoading || taskPage === 0} onClick={() => void loadTasks(taskPage - 1)}>Önceki</button><span>{taskPage + 1} / {taskPages}</span><button className="secondary-button" disabled={busy || taskLoading || taskPage + 1 >= taskPages} onClick={() => void loadTasks(taskPage + 1)}>Sonraki</button></nav>}
     </section>
 
-    <ModalPanel open={canManage && editingTask !== null} title="Görevi düzenle" onClose={() => setEditingTask(null)}>{editingTask && <TaskForm key={editingTask.id} members={members} teams={teams} submitLabel="Değişiklikleri kaydet" busy={busy} initialValue={{ title: editingTask.title, description: editingTask.description ?? "", assigneeIds: editingTask.assignees.map((assignee) => assignee.userId), teamIds: [], allMembers: false, priority: editingTask.priority, dueAt: toLocalDateTime(editingTask.dueAt) }} onSubmit={updateTask} onCancel={() => setEditingTask(null)} />}</ModalPanel>
+    <TaskDetailDialog task={detailTask} canChange={!!detailTask && !project.archived && (canManage || detailTask.assignees.some((a) => a.userId === user?.id))} canHandoff={canManage && !project.archived} members={members} teams={teams} onClose={() => setDetailTask(null)} onChanged={() => void loadTasks(0)} />
+    <ModalPanel open={canManage && editingTask !== null} title="Görevi düzenle" onClose={() => setEditingTask(null)}>{editingTask && <TaskForm key={editingTask.id} members={members} teams={teams} submitLabel="Değişiklikleri kaydet" busy={busy} initialValue={{ title: editingTask.title, description: editingTask.description ?? "", assigneeIds: editingTask.assignees.map((assignee) => assignee.userId), teamIds: (editingTask.teams ?? []).map((team) => team.id), allMembers: false, priority: editingTask.priority, dueAt: toLocalDateTime(editingTask.dueAt) }} onSubmit={updateTask} onCancel={() => setEditingTask(null)} />}</ModalPanel>
     <ModalPanel className="project-people-dialog" open={showMemberForm} title="Projeye çalışan ekle" onClose={() => setShowMemberForm(false)}><form className="member-picker modal-member-picker" onSubmit={addMember}><div className="member-combobox" ref={memberPickerRef}><input autoFocus role="combobox" aria-label="Eklenecek üyeyi ara" aria-expanded={candidateResultsOpen} aria-controls="member-candidate-results" autoComplete="off" placeholder="İsim veya e-posta yazın" value={candidateQuery} onFocus={() => setCandidateResultsOpen(true)} onChange={(event) => { setCandidateQuery(event.target.value); setCandidateResultsOpen(true); }} />{selectedMemberIds.length > 0 && <div className="selected-members" aria-label="Seçilen üyeler">{selectedMemberIds.map((selectedId) => { const candidate = candidates.find((item) => item.id === selectedId); return candidate && <span key={selectedId}>{candidate.name}<button type="button" aria-label={`${candidate.name} seçimini kaldır`} onClick={() => setSelectedMemberIds((current) => current.filter((value) => value !== selectedId))}>×</button></span>; })}</div>}{candidateResultsOpen && <div className="candidate-dropdown" id="member-candidate-results" role="listbox">{visibleCandidates.length === 0 ? <p>Uygun kullanıcı bulunamadı.</p> : visibleCandidates.map((candidate) => <button type="button" role="option" aria-selected={selectedMemberIds.includes(candidate.id)} key={candidate.id} onClick={() => { setSelectedMemberIds((current) => [...current, candidate.id]); setCandidateQuery(""); }}><strong>{candidate.name}</strong><span>{candidate.email} · {jobTitleLabel(candidate.jobTitle)}</span></button>)}</div>}</div><button className="primary-button compact-button" disabled={busy || selectedMemberIds.length === 0}>{selectedMemberIds.length > 0 ? `${selectedMemberIds.length} üyeyi ekle` : "Üye ekle"}</button></form></ModalPanel>
     <ModalPanel className="project-people-dialog" open={showTeamForm} title="Yeni takım oluştur" onClose={() => setShowTeamForm(false)}><form className="team-form" onSubmit={createTeam}><label>Takım adı<input autoFocus required maxLength={100} placeholder="Örn. A Takımı" value={teamForm.name} onChange={(event) => setTeamForm({ ...teamForm, name: event.target.value })} /></label><fieldset><legend>Takım üyeleri</legend><div className="assignment-options">{members.map((member) => <label className="assignment-option" key={member.userId}><input type="checkbox" checked={teamForm.userIds.includes(member.userId)} onChange={() => setTeamForm({ ...teamForm, userIds: teamForm.userIds.includes(member.userId) ? teamForm.userIds.filter((id) => id !== member.userId) : [...teamForm.userIds, member.userId] })} /><span><strong>{member.name}</strong><small>{jobTitleLabel(member.jobTitle)}</small></span></label>)}</div></fieldset><div className="dialog-actions"><button className="primary-button compact-button" disabled={busy || teamForm.userIds.length === 0}>Takımı oluştur</button></div></form></ModalPanel>
     <ModalPanel open={canManage && showTaskForm} title="Yeni görev oluştur" onClose={() => setShowTaskForm(false)}><TaskForm members={members} teams={teams} submitLabel="Görev oluştur" busy={busy} onSubmit={createTask} /></ModalPanel>

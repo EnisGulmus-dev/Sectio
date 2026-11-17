@@ -34,6 +34,46 @@ class ProjectServiceTest {
     void setup() { service = new ProjectService(projects, members, users, tasks, teams); }
 
     @Test
+    void selectedMembersAreAddedOnceAlongWithOwner() {
+        User owner = user(1L, "owner@test.local", Role.ADMIN);
+        User selected = user(2L, "selected@test.local", Role.EMPLOYEE);
+        when(users.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(users.findByIdForUpdate(2L)).thenReturn(Optional.of(selected));
+        when(projects.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.create(owner.getEmail(), "Project", null, List.of(2L, 1L, 2L));
+
+        verify(members).save(argThat(member -> member.getUser() == owner));
+        verify(members).saveAll(argThat(selectedMembers -> {
+            var iterator = selectedMembers.iterator();
+            return iterator.hasNext() && iterator.next().getUser() == selected && !iterator.hasNext();
+        }));
+        verify(users, times(1)).findByIdForUpdate(2L);
+    }
+
+    @Test
+    void invalidInitialMemberPreventsSavingProjectOrMemberships() {
+        User owner = user(1L, "owner@test.local", Role.ADMIN);
+        User inactive = user(2L, "inactive@test.local", Role.EMPLOYEE);
+        inactive.deactivate();
+        when(users.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+        when(users.findByIdForUpdate(2L)).thenReturn(Optional.of(inactive));
+
+        assertThatThrownBy(() -> service.create(owner.getEmail(), "Project", null, List.of(2L)))
+                .isInstanceOf(ProjectException.class).hasMessageContaining("active");
+        verifyNoInteractions(projects, members);
+    }
+
+    @Test
+    void ordinaryEmployeeCannotBrowseProjectCreationCandidates() {
+        User employee = user(2L, "employee@test.local", Role.EMPLOYEE);
+        when(users.findByEmail(employee.getEmail())).thenReturn(Optional.of(employee));
+        assertThatThrownBy(() -> service.creationCandidates(employee.getEmail()))
+                .isInstanceOf(ProjectException.class).hasMessageContaining("Only admins");
+        verify(users, never()).findByActiveTrueOrderByNameAsc();
+    }
+
+    @Test
     void ownerBecomesMemberWhenProjectIsCreated() {
         User admin = new User("Admin", "admin@test.local", "hash", Role.ADMIN);
         when(users.findByEmail("admin@test.local")).thenReturn(Optional.of(admin));

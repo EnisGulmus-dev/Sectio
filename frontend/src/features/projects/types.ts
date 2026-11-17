@@ -6,6 +6,9 @@ export type ProjectMemberCandidate={id:number;name:string;email:string;role:"ADM
 export type ProjectTeamMember={userId:number;name:string;email:string;jobTitle:JobTitle};
 export type ProjectTeam={id:number;name:string;members:ProjectTeamMember[];createdAt:string};
 export type TaskStatus="TODO"|"IN_PROGRESS"|"DONE"|"CANCELLED"; export type TaskPriority="LOW"|"MEDIUM"|"HIGH"|"CRITICAL";
+export type TaskBucket = "ACTIVE" | "COMPLETED" | "CANCELLED" | "ALL";
 export type TaskAssignee={userId:number;name:string};
-export type Task={id:number;projectId:number;projectName:string;createdById:number;createdByName:string;assignees:TaskAssignee[];title:string;description:string|null;status:TaskStatus;priority:TaskPriority;dueAt:string|null;completedAt:string|null;createdAt:string;updatedAt:string};
+export type Task={id:number;projectId:number;projectName:string;createdById:number;createdByName:string;assignees:TaskAssignee[];teams:{id:number;name:string}[];title:string;description:string|null;status:TaskStatus;priority:TaskPriority;dueAt:string|null;completedAt:string|null;createdAt:string;updatedAt:string;predecessorId?:number|null};
+export type TaskProgress={id:number;actorName:string;oldStatus:TaskStatus;newStatus:TaskStatus;note:string|null;occurredAt:string};
+export type TaskHandoff={id:number;sourceTaskId:number|null;targetTaskId:number|null;sourceTitle:string;targetTitle:string;recipientPeople:string;recipientTeams:string;actorName:string;handedOffAt:string};
 export type TaskInput={title:string;description:string;assigneeIds:number[];teamIds:number[];allMembers:boolean;priority:TaskPriority;dueAt:string|null};

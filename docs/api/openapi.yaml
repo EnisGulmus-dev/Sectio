@@ -12,9 +12,289 @@ tags:
   - name: Admin Users
   - name: Projects
   - name: Tasks
+  - name: Channels
   - name: Dashboard
   - name: Operations
 paths:
+  /api/v1/organization/teams:
+    get:
+      summary: List company teams for an active user
+      security: [{sessionCookie: []}]
+      responses:
+        "200": {description: Company teams, separate from project teams}
+    post:
+      summary: Create a company team, ADMIN only
+      security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [name], properties: {name: {type: string, minLength: 1, maxLength: 100}}}
+      responses:
+        "201": {description: Team created}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+  /api/v1/organization/teams/{teamId}:
+    patch:
+      summary: Rename a company team, ADMIN only
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: teamId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [name], properties: {name: {type: string, minLength: 1, maxLength: 100}}}
+      responses:
+        "200": {description: Team renamed}
+    delete:
+      summary: Delete company team and its memberships, ADMIN only
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: teamId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Deleted; users and project work remain}
+  /api/v1/organization/managers:
+    get:
+      summary: List active users eligible to be a manager
+      security: [{sessionCookie: []}]
+      responses:
+        "200": {description: Manager candidates}
+  /api/v1/organization/reports:
+    get:
+      summary: List the current user's active direct reports
+      security: [{sessionCookie: []}]
+      responses:
+        "200": {description: Direct reports}
+  /api/v1/organization/users/{userId}:
+    get:
+      summary: Read own, direct report's, or ADMIN-visible organization relationship
+      security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/UserId"}]
+      responses:
+        "200": {description: Manager and company teams}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+    put:
+      summary: Assign company teams and direct manager
+      description: ADMIN may set any valid manager; a direct manager may update only their own report and must remain that report's manager. Cycles and inactive or unqualified managers are rejected.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamIds]
+              properties:
+                managerId: {type: [integer, "null"], format: int64, minimum: 1}
+                teamIds: {type: array, maxItems: 50, items: {type: integer, format: int64, minimum: 1}}
+      responses:
+        "200": {description: Updated relationship}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/profile/commit:
+    post:
+      summary: Save own profile and selected image together
+      security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [imageMode]
+                  properties:
+                    displayName: {type: [string, "null"], maxLength: 100}
+                    biography: {type: [string, "null"], maxLength: 500}
+                    timeZone: {type: [string, "null"], maxLength: 64}
+                    imageMode: {type: string, enum: [KEEP, INITIALS, AVATAR, PHOTO]}
+                    avatarId: {type: [string, "null"], maxLength: 80}
+                file: {type: string, format: binary}
+            encoding: {data: {contentType: application/json}}
+      responses:
+        "200": {description: Profile and selected image updated}
+        "400": {$ref: "#/components/responses/ValidationError"}
+  /api/v1/channels/{channelId}/messages:
+    get:
+      tags: [Channels]
+      summary: List channel messages from newest to oldest
+      description: Membership required; beforeId requests older IDs and limit is clamped to 1–100. Deleted messages return null body and deleted=true.
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: beforeId, in: query, schema: {type: integer, format: int64}}
+        - {name: limit, in: query, schema: {type: integer, default: 50}}
+      responses:
+        "200": {description: Message history}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {description: Channel missing or not visible}
+    post:
+      tags: [Channels]
+      summary: Create a message as a channel member
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties: {body: {type: string, minLength: 1, maxLength: 4000}}
+      responses:
+        "201": {description: Message created}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+  /api/v1/channels/{channelId}/messages/{messageId}:
+    patch:
+      tags: [Channels]
+      summary: Edit own non-deleted message
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: messageId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties: {body: {type: string, minLength: 1, maxLength: 4000}}
+      responses:
+        "200": {description: Message updated with editedAt}
+        "404": {description: Message missing or not editable by caller}
+    delete:
+      tags: [Channels]
+      summary: Delete own message contents
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: messageId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Message contents deleted, placeholder retained}
+        "404": {description: Message missing or not deletable by caller}
+  /api/v1/channels:
+    get:
+      tags: [Channels]
+      summary: List public channels and private channels the current user belongs to
+      security: [{sessionCookie: []}]
+      responses:
+        "200": {description: Visible corporate channels}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+    post:
+      tags: [Channels]
+      summary: Create a channel and join it as owner
+      description: ADMIN, TEAM_LEADER, PROJECT_MANAGER and PROJECT_OWNER only.
+      security: [{sessionCookie: []}]
+      parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, visibility]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 100}
+                description: {type: [string, "null"], maxLength: 500}
+                visibility: {type: string, enum: [PUBLIC, PRIVATE]}
+      responses:
+        "201": {description: Channel created}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/channels/{channelId}:
+    get:
+      tags: [Channels]
+      summary: Read a public channel or a private channel of which the user is a member
+      security: [{sessionCookie: []}]
+      parameters: [{name: channelId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses:
+        "200": {description: Channel details}
+        "404": {description: Channel missing or not visible}
+    delete:
+      tags: [Channels]
+      summary: Delete a channel as its owner
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Channel and memberships deleted}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+  /api/v1/channels/{channelId}/owner/{memberId}:
+    put:
+      tags: [Channels]
+      summary: Transfer ownership to an active channel member
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: memberId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Ownership transferred}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/channels/{channelId}/join:
+    post:
+      tags: [Channels]
+      summary: Join a public channel
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Joined or already a member}
+        "404": {description: Channel missing or not visible}
+  /api/v1/channels/{channelId}/members:
+    get:
+      tags: [Channels]
+      summary: List active members of a channel the caller belongs to
+      security: [{sessionCookie: []}]
+      parameters: [{name: channelId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses:
+        "200": {description: Active channel members}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {description: Channel missing or not visible}
+  /api/v1/channels/{channelId}/members/{memberId}:
+    put:
+      tags: [Channels]
+      summary: Add an active member, owner only
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: memberId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Added or already a member}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "409": {$ref: "#/components/responses/Conflict"}
+    delete:
+      tags: [Channels]
+      summary: Owner removes a member or member leaves
+      security: [{sessionCookie: []}]
+      parameters:
+        - {name: channelId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {name: memberId, in: path, required: true, schema: {type: integer, format: int64}}
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Removed or already absent}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "409": {description: Owner cannot leave or be removed}
   /actuator/health:
     get:
       tags: [Operations]
@@ -139,7 +419,7 @@ paths:
       parameters:
         - name: deleted
           in: query
-          description: False lists current active/inactive accounts; true lists deleted accounts for read-only history.
+          description: False lists current active/inactive accounts; true lists recoverable deleted accounts. Permanently anonymized accounts are excluded from both lists.
           schema: {type: boolean, default: false}
       responses:
         "200":
@@ -155,6 +435,7 @@ paths:
     post:
       tags: [Admin Users]
       summary: Create a user with a temporary password
+      description: Trims and lowercases the email. New addresses must use ASCII characters and pass server Email validation; acceptance does not verify a mailbox. An address reserved by a deleted account returns EMAIL_BELONGS_TO_DELETED_USER with restore/purge guidance.
       security:
         - sessionCookie: []
       parameters:
@@ -208,7 +489,7 @@ paths:
     delete:
       tags: [Admin Users]
       summary: Delete an account from the current-user list while preserving work history
-      description: Records deletion, disables login and revokes sessions, removes project/team memberships and assignments atomically. Historical identity, authored tasks and ownership remain. Deleted accounts are excluded from the default list and cannot be edited, password-reset or reactivated. Email remains reserved; no restore or physical purge is exposed. Self-deletion and deletion of the last active admin are forbidden. Repeated deletion is idempotent.
+      description: Records deletion, disables login and revokes sessions, removes project/team memberships and assignments atomically. Historical identity, authored tasks and ownership remain. Deleted accounts are excluded from the default list; ordinary edit/status/password-reset endpoints reject them. Email remains reserved until permanent anonymization. Use the dedicated restore endpoint to recover with a new temporary password. Self-deletion and deletion of the last active admin are forbidden. Repeated deletion is idempotent.
       security:
         - sessionCookie: []
       parameters:
@@ -224,6 +505,44 @@ paths:
         "409":
           description: User is the current admin or the last active admin
 
+  /api/v1/admin/users/{userId}/restore:
+    post:
+      tags: [Admin Users]
+      summary: Restore a deleted account with a new temporary password
+      description: ADMIN only. Requires a deleted, non-purged account. Activates the account, requires password change, revokes previous sessions. Does not reinstate project/team memberships or task assignments; ownership and historical records remain.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ResetUserPasswordRequest"}
+      responses:
+        "200":
+          description: Restored account
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AdminUser"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/admin/users/{userId}/purge:
+    delete:
+      tags: [Admin Users]
+      summary: Permanently anonymize a deleted account and remove it from the deleted list
+      description: ADMIN only, irreversible and idempotent. Requires prior deletion. Replaces account name/email/password, resets role/title, revokes sessions, releases the original email and marks purged_at. Keeps an inactive historical identity for authored tasks, project ownership and assignment history. A new account reusing the original email has a different ID and does not inherit those references. Purged identities cannot be restored. This does not rewrite free-text work content.
+      security: [{sessionCookie: []}]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "204": {description: Deleted account anonymized; historical work preserved}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/admin/users/{userId}/deletion-impact:
     get:
       tags: [Admin Users]
@@ -360,14 +679,14 @@ paths:
     post:
       tags: [Projects]
       summary: Create a project
-      description: Available to administrators and employees whose job title is TEAM_LEADER or MANAGER.
+      description: Available to administrators and project-creation titles. Creates the project, owner membership and selected active memberIds atomically; duplicates and the owner ID are ignored.
       security: [{sessionCookie: []}]
       parameters: [{$ref: "#/components/parameters/CsrfHeader"}]
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: "#/components/schemas/ProjectInput"}
+            schema: {$ref: "#/components/schemas/CreateProjectInput"}
       responses:
         "201":
           description: Project created; creator is owner and first member
@@ -375,6 +694,22 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Project"}
         "400": {$ref: "#/components/responses/ValidationError"}
+        "401": {$ref: "#/components/responses/AuthenticationRequired"}
+        "403": {$ref: "#/components/responses/AccessDenied"}
+  /api/v1/projects/member-candidates:
+    get:
+      tags: [Projects]
+      summary: List active people selectable when creating a project
+      description: Same permission as project creation. Excludes the current user, who is added as owner automatically.
+      security: [{sessionCookie: []}]
+      responses:
+        "200":
+          description: Active candidate users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/ProjectMemberCandidate"}
         "401": {$ref: "#/components/responses/AuthenticationRequired"}
         "403": {$ref: "#/components/responses/AccessDenied"}
   /api/v1/projects/{projectId}:
@@ -607,7 +942,7 @@ paths:
         - {name: teamId, in: path, required: true, schema: {type: integer, format: int64}}
         - $ref: "#/components/parameters/CsrfHeader"
       responses:
-        "204": {description: Team deleted; project members remain unchanged}
+        "204": {description: Team and task-team links deleted; tasks, assignee snapshots and project members remain unchanged}
         "403": {$ref: "#/components/responses/AccessDenied"}
         "404": {$ref: "#/components/responses/NotFound"}
   /api/v1/projects/{projectId}/tasks:
@@ -618,6 +953,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/TaskBucketFilter"
         - $ref: "#/components/parameters/TaskStatusFilter"
         - $ref: "#/components/parameters/TaskPriorityFilter"
         - $ref: "#/components/parameters/AssigneeId"
@@ -662,6 +998,7 @@ paths:
       security: [{sessionCookie: []}]
       parameters:
         - $ref: "#/components/parameters/Query"
+        - $ref: "#/components/parameters/TaskBucketFilter"
         - $ref: "#/components/parameters/TaskStatusFilter"
         - $ref: "#/components/parameters/TaskPriorityFilter"
         - $ref: "#/components/parameters/Page"
@@ -811,6 +1148,12 @@ components:
       in: query
       required: false
       schema: {$ref: "#/components/schemas/TaskPriority"}
+    TaskBucketFilter:
+      name: bucket
+      in: query
+      required: false
+      description: ACTIVE contains TODO and IN_PROGRESS, COMPLETED contains DONE, CANCELLED contains CANCELLED, ALL includes every status. Defaults to ACTIVE unless status is explicitly supplied without bucket (legacy status filtering). Combined bucket and status are intersected.
+      schema: {type: string, enum: [ACTIVE, COMPLETED, CANCELLED, ALL]}
     AssigneeId:
       name: assigneeId
       in: query
@@ -820,7 +1163,7 @@ components:
       name: unassigned
       in: query
       required: false
-      description: Only tasks with no assignees. Cannot be combined with assigneeId. Project access rules still apply.
+      description: Only tasks with no individual assignees and no saved team targets. Cannot be combined with assigneeId. Project access rules still apply.
       schema: {type: boolean, default: false}
     Page:
       name: page
@@ -972,6 +1315,8 @@ components:
           enum: [ADMIN, EMPLOYEE]
         jobTitle:
           $ref: "#/components/schemas/JobTitle"
+        managerId: {type: [integer, "null"], format: int64, minimum: 1}
+        teamIds: {type: [array, "null"], maxItems: 50, items: {type: integer, format: int64, minimum: 1}}
 
     UpdateUserRequest:
       type: object
@@ -1086,6 +1431,18 @@ components:
         token:
           type: string
 
+    CreateProjectInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 150}
+        description: {type: [string, "null"], maxLength: 1000}
+        memberIds:
+          type: [array, "null"]
+          maxItems: 50
+          items: {type: integer, format: int64, minimum: 1}
+
     ProjectInput:
       type: object
       additionalProperties: false
@@ -1165,7 +1522,7 @@ components:
     TaskInput:
       type: object
       additionalProperties: false
-      description: At least one direct assignee, team or allMembers=true must resolve to an active project member.
+      description: At least one direct assignee, team or allMembers=true must resolve to an active project member. Explicit team targets are persisted and reusable on multiple tasks; resolved people are a snapshot. Later team membership edits do not silently reassign existing work.
       required: [allMembers, title, priority]
       properties:
         assigneeIds:
@@ -1193,7 +1550,7 @@ components:
 
     Task:
       type: object
-      required: [id, projectId, projectName, createdById, createdByName, assignees, title, status, priority, createdAt, updatedAt]
+      required: [id, projectId, projectName, createdById, createdByName, assignees, teams, title, status, priority, createdAt, updatedAt]
       properties:
         id: {type: integer, format: int64}
         projectId: {type: integer, format: int64}
@@ -1202,8 +1559,15 @@ components:
         createdByName: {type: string}
         assignees:
           type: array
-          minItems: 1
           items: {$ref: "#/components/schemas/TaskAssignee"}
+        teams:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: integer, format: int64}
+              name: {type: string}
         title: {type: string}
         description: {type: [string, "null"]}
         status: {$ref: "#/components/schemas/TaskStatus"}

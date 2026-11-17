@@ -10,7 +10,8 @@ import { EmptyState, InlineAlert, LoadingState } from "../../../shared/ui/Feedba
 import { useToast } from "../../../shared/ui/ToastProvider";
 import { projectsApi } from "../api/projectsApi";
 import { formatDate } from "../projectFormat";
-import type { Project } from "../types";
+import type { Project, ProjectMemberCandidate } from "../types";
+import { ProjectMembersPicker } from "../components/ProjectMembersPicker";
 
 type ProjectAction = { type: "archive" | "restore" | "delete"; project: Project } | null;
 
@@ -23,7 +24,12 @@ export function ProjectsPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", memberIds: [] as number[] });
+  const [candidates, setCandidates] = useState<ProjectMemberCandidate[]>([]);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [candidateError, setCandidateError] = useState<string | null>(null);
+  const [candidateRetry, setCandidateRetry] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
   const [projectAction, setProjectAction] = useState<ProjectAction>(null);
   const [busy, setBusy] = useState(false);
   const { user } = useAuth();
@@ -44,16 +50,28 @@ export function ProjectsPage() {
 
   useEffect(() => { setPage(0); void load(0); }, [archived]);
 
+  useEffect(() => {
+    if (!showForm || !canCreateProject) return;
+    let current = true;
+    setCandidateLoading(true); setCandidateError(null); setFormError(null);
+    projectsApi.creationCandidates()
+      .then((people) => { if (current) setCandidates(people); })
+      .catch((caught) => { if (current) setCandidateError(isApiClientError(caught) ? caught.message : "Kişiler yüklenemedi"); })
+      .finally(() => { if (current) setCandidateLoading(false); });
+    return () => { current = false; };
+  }, [showForm, canCreateProject, candidateRetry]);
+
   async function create(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
+    setFormError(null);
     try {
       await projectsApi.create(form);
-      setForm({ name: "", description: "" });
+      setForm({ name: "", description: "", memberIds: [] });
       setShowForm(false);
       await load(0);
       showToast("Proje oluşturuldu");
-    } catch (caught) { setError(isApiClientError(caught) ? caught.message : "Proje oluşturulamadı"); }
+    } catch (caught) { setFormError(isApiClientError(caught) ? caught.message : "Proje oluşturulamadı"); }
     finally { setBusy(false); }
   }
 
@@ -87,7 +105,17 @@ export function ProjectsPage() {
     <header className="page-header"><div><p className="eyebrow">Çalışma alanı</p><h1>Projeler</h1><p>Projeleri, üyeleri ve görevleri tek yerden yönetin.</p></div>{canCreateProject && <button className="primary-button compact-button" aria-haspopup="dialog" onClick={() => setShowForm(true)}>Yeni proje</button>}</header>
     {error && <InlineAlert message={error} />}
     <form className="filter-row" onSubmit={(event) => { event.preventDefault(); void load(0); }}><input aria-label="Proje ara" placeholder="Proje adıyla ara" value={query} onChange={(event) => setQuery(event.target.value)} /><button className="secondary-button">Ara</button><label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Arşivlenenleri göster</label></form>
-    <ModalPanel open={showForm && !!canCreateProject} title="Yeni proje" onClose={() => setShowForm(false)}><p className="modal-description">Proje sahibi olarak otomatik biçimde üye listesine eklenirsiniz.</p><form className="management-form" onSubmit={create}><label>Proje adı<input autoFocus required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label className="full-field">Açıklama<textarea rows={3} maxLength={1000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label><button className="primary-button compact-button" disabled={busy}>{busy ? "Oluşturuluyor…" : "Oluştur"}</button></form></ModalPanel>
+    <ModalPanel open={showForm && !!canCreateProject} title="Yeni proje" onClose={() => setShowForm(false)}>
+      <p className="modal-description">Proje bilgilerini ve projede çalışacak kişileri birlikte belirleyin.</p>
+      {formError && <InlineAlert message={formError} />}
+      {candidateError && <div><InlineAlert message={candidateError} /><button className="secondary-button" type="button" onClick={() => setCandidateRetry((value) => value + 1)}>Kişileri yeniden yükle</button></div>}
+      <form className="management-form" onSubmit={create}>
+        <label>Proje adı<input autoFocus required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+        <label className="full-field">Açıklama<textarea rows={3} maxLength={1000} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+        {candidateLoading ? <div className="full-field"><LoadingState label="Kişiler yükleniyor…" /></div> : showForm && <ProjectMembersPicker candidates={candidates} selected={form.memberIds} disabled={busy || !!candidateError} onChange={(memberIds) => setForm({ ...form, memberIds })} />}
+        <button className="primary-button compact-button" disabled={busy || candidateLoading || !!candidateError}>{busy ? "Oluşturuluyor…" : "Oluştur"}</button>
+      </form>
+    </ModalPanel>
     {loading ? <LoadingState /> : items.length === 0 ? <EmptyState title="Proje bulunamadı" description={query ? "Arama ifadenizi değiştirip yeniden deneyin." : "Yeni proje oluşturarak başlayın."} /> : <><div className="project-grid">{items.map((project) => { const canManage = user?.role === "ADMIN" || user?.id === project.ownerId; return <article className="panel project-card" key={project.id}><div><div className="task-card-top"><span className={`status-label ${project.archived ? "inactive" : "active"}`}>{project.archived ? "Arşiv" : "Aktif"}</span><small>{formatDate(project.updatedAt)}</small></div><h2>{project.name}</h2><p>{project.description || "Bu proje için açıklama eklenmedi."}</p><small>Sahip: {project.ownerName}</small></div><div className="button-row project-actions"><Link className="primary-link" to={`/projects/${project.id}`}>Projeyi aç</Link>{canManage && !project.archived && <button className="secondary-button" type="button" onClick={() => setProjectAction({ type: "archive", project })}>Arşivle</button>}{canManage && project.archived && <button className="secondary-button" type="button" onClick={() => setProjectAction({ type: "restore", project })}>Geri yükle</button>}{canManage && <button className="text-button" type="button" onClick={() => setProjectAction({ type: "delete", project })}>Kalıcı sil</button>}</div></article>; })}</div>{totalPages > 1 && <nav className="pagination" aria-label="Proje sayfaları"><button className="secondary-button" disabled={page === 0} onClick={() => void load(page - 1)}>Önceki</button><span>{page + 1} / {totalPages}</span><button className="secondary-button" disabled={page + 1 >= totalPages} onClick={() => void load(page + 1)}>Sonraki</button></nav>}</>}
     <ConfirmDialog open={!!projectAction} title={actionCopy.title} description={actionCopy.description} confirmLabel={actionCopy.label} tone={projectAction?.type === "restore" ? "primary" : "danger"} busy={busy} onConfirm={() => void confirmProjectAction()} onCancel={() => setProjectAction(null)} />
   </div>;

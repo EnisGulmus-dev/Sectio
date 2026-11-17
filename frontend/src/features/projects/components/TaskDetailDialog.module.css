@@ -1,0 +1,10 @@
+.content { display: grid; gap: 14px; color: var(--ink); }
+.content header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.content h2, .content h3, .content p { margin: 0; }
+.content p { line-height: 1.55; overflow-wrap: anywhere; }
+.form { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.form label { display: grid; gap: 6px; }
+.form button { justify-self: start; }
+.events { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.events li { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.events small { color: var(--muted); }

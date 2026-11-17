@@ -48,7 +48,7 @@ describe("TaskForm", () => {
     expect(screen.getByLabelText(/Ada Çalışan/)).not.toBeChecked();
   });
 
-  it("replaces individual selections with the matching team", async () => {
+  it("keeps individual assignments distinct from explicitly selected teams", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<TaskForm members={members} teams={teams} submitLabel="Görev oluştur" onSubmit={onSubmit} />);
@@ -57,16 +57,29 @@ describe("TaskForm", () => {
     await user.click(screen.getByLabelText(/Ada Çalışan/));
     await user.click(screen.getByLabelText(/Ece Lider/));
 
-    expect(screen.getByLabelText(/Platform Takımı/)).toBeChecked();
-    expect(screen.getByLabelText(/Ada Çalışan/)).toBeDisabled();
-    expect(screen.getByLabelText(/Ece Lider/)).toBeDisabled();
+    expect(screen.getByLabelText(/Platform Takımı/)).not.toBeChecked();
+    expect(screen.getByLabelText(/Ada Çalışan/)).toBeChecked();
+    expect(screen.getByLabelText(/Ece Lider/)).toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Görev oluştur" }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      assigneeIds: [],
-      teamIds: [11],
+      assigneeIds: [2, 3],
+      teamIds: [],
       allMembers: false,
     }));
+  });
+
+  it("reuses a saved team for successive tasks", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(<TaskForm members={members} teams={teams} submitLabel="Görev oluştur" onSubmit={onSubmit} />);
+    for (const title of ["İlk takım işi", "İkinci takım işi"]) {
+      await user.type(screen.getByLabelText("Başlık"), title);
+      await user.click(screen.getByLabelText(/Platform Takımı/));
+      await user.click(screen.getByRole("button", { name: "Görev oluştur" }));
+      expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ title, teamIds: [11], assigneeIds: [] }));
+    }
+    expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 
   it("removes duplicate people when their team is selected", async () => {

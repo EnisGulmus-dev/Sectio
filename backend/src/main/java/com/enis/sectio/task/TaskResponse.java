@@ -4,16 +4,18 @@ import java.time.Instant;
 import java.util.List;
 
 public record TaskResponse(Long id, Long projectId, String projectName, Long createdById, String createdByName,
-                           List<AssigneeResponse> assignees, String title, String description, TaskStatus status,
-                           TaskPriority priority, Instant dueAt, Instant completedAt, Instant createdAt, Instant updatedAt) {
+                           List<AssigneeResponse> assignees, List<TeamResponse> teams, String title, String description, TaskStatus status,
+                           TaskPriority priority, Instant dueAt, Instant completedAt, Instant createdAt, Instant updatedAt, Long predecessorId) {
     public static TaskResponse from(Task task) {
         return new TaskResponse(task.getId(), task.getProject().getId(), task.getProject().getName(),
                 task.getCreatedBy().getId(), task.getCreatedBy().getName(),
                 task.getAssignees().stream().map(AssigneeResponse::from).toList(),
+                task.getTargetTeams().stream().map(team -> new TeamResponse(team.getId(), team.getName())).toList(),
                 task.getTitle(), task.getDescription(), task.getStatus(), task.getPriority(), task.getDueAt(),
-                task.getCompletedAt(), task.getCreatedAt(), task.getUpdatedAt());
+                task.getCompletedAt(), task.getCreatedAt(), task.getUpdatedAt(), task.getPredecessor() == null ? null : task.getPredecessor().getId());
     }
     public record AssigneeResponse(Long userId, String name) {
         static AssigneeResponse from(com.enis.sectio.user.User user) { return new AssigneeResponse(user.getId(), user.getName()); }
     }
+    public record TeamResponse(Long id, String name) {}
 }

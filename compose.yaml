@@ -27,6 +27,9 @@ services:
       ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-}
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      PROFILE_PHOTO_DIR: /app/profile-photos
+    volumes:
+      - sectio-profile-photos:/app/profile-photos
     depends_on:
       db:
         condition: service_healthy
@@ -41,4 +44,5 @@ services:
 
 volumes:
   sectio-postgres-data:
+  sectio-profile-photos:
 

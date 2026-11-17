@@ -1,0 +1,19 @@
+.columns { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,300px),1fr)); gap: 16px; align-items: start; }
+.inline, .form { display: grid; gap: 10px; }
+.row, .person { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.person { width: 100%; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; }
+.person:hover { color: var(--accent); }
+.teams { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.teams label { display: flex; align-items: center; gap: 8px; }
+.teams input { width: 16px; height: 16px; min-height: 16px; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.sectionHead h2 { margin: 0; }
+.teamCard { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); }
+.teamActions { display: flex; gap: 8px; }
+.deleteAction { min-height: 38px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--danger); background: var(--paper); cursor: pointer; }
+.deleteAction:hover { border-color: var(--danger); }
+.memberPicker { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.memberPicker > div { display: grid; gap: 6px; max-height: 240px; overflow: auto; }
+.memberPicker p { color: var(--muted); font-size: 12px; }
+.memberPicker label { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.memberPicker input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; flex: 0 0 auto; margin: 0; }

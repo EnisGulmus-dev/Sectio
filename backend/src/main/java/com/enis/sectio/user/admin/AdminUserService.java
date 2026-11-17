@@ -30,6 +30,9 @@ public class AdminUserService {
     private final ProjectTeamRepository projectTeamRepository;
     private final EndedTaskAssignmentRepository workHistory;
     private final UserWorkTrackingRepository workTracking;
+    private final com.enis.sectio.user.ProfileRepository profiles;
+    private final com.enis.sectio.user.ProfilePhotoStore profilePhotos;
+    private final com.enis.sectio.organization.OrganizationService organization;
 
     public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                             ProjectRepository projectRepository,
@@ -37,7 +40,8 @@ public class AdminUserService {
                             TaskRepository taskRepository,
                             ProjectTeamRepository projectTeamRepository,
                             EndedTaskAssignmentRepository workHistory,
-                            UserWorkTrackingRepository workTracking) {
+                            UserWorkTrackingRepository workTracking, com.enis.sectio.user.ProfileRepository profiles,
+                            com.enis.sectio.user.ProfilePhotoStore profilePhotos, com.enis.sectio.organization.OrganizationService organization) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.projectRepository = projectRepository;
@@ -46,11 +50,12 @@ public class AdminUserService {
         this.projectTeamRepository = projectTeamRepository;
         this.workHistory = workHistory;
         this.workTracking = workTracking;
+        this.profiles = profiles; this.profilePhotos = profilePhotos; this.organization = organization;
     }
 
     @Transactional(readOnly = true)
     public List<AdminUserResponse> listUsers(boolean deleted) {
-        return (deleted ? userRepository.findByDeletedAtIsNotNullOrderByNameAsc()
+        return (deleted ? userRepository.findByDeletedAtIsNotNullAndPurgedAtIsNullOrderByNameAsc()
                 : userRepository.findByDeletedAtIsNullOrderByNameAsc())
                 .stream()
                 .map(AdminUserResponse::from)
@@ -63,7 +68,10 @@ public class AdminUserService {
         validatePassword(password);
 
         if (userRepository.existsByEmail(normalizedEmail)) {
-            throw conflict("EMAIL_ALREADY_EXISTS", "A user with this email already exists");
+            if (userRepository.findByEmail(normalizedEmail).filter(existing -> existing.getDeletedAt() != null).isPresent()) {
+                throw conflict("EMAIL_BELONGS_TO_DELETED_USER", "Bu e-posta silinmiş bir hesaba ait. Silinenler bölümünden hesabı geri yükleyin veya kalıcı silin.");
+            }
+            throw conflict("EMAIL_ALREADY_EXISTS", "Bu e-posta adresiyle kayıtlı bir kullanıcı zaten var.");
         }
 
         User user = new User(name, normalizedEmail, passwordEncoder.encode(password), role);
@@ -78,6 +86,12 @@ public class AdminUserService {
             Role role,
             JobTitle jobTitle,
             String currentAdminEmail) {
+        return updateUser(userId, name, null, role, jobTitle, currentAdminEmail);
+    }
+
+    @Transactional
+    public AdminUserResponse updateUser(Long userId, String name, String email, Role role, JobTitle jobTitle, String currentAdminEmail) {
+        organization.lockOrganization();
         User user = findManageableUser(userId);
         boolean currentUser = user.getEmail().equals(normalizeEmail(currentAdminEmail));
 
@@ -92,6 +106,16 @@ public class AdminUserService {
             throw conflict("LAST_ACTIVE_ADMIN", "The last active admin cannot lose the admin role");
         }
 
+        if (role != Role.ADMIN && !jobTitle.canCreateProjects() && organization.hasDirectReports(userId)) {
+            throw conflict("MANAGER_HAS_REPORTS", "Yönetici yetkisini kaldırmadan önce bağlı çalışanları devredin.");
+        }
+        if (email != null) {
+            String normalized = normalizeEmail(email);
+            if (!normalized.equals(user.getEmail()) && userRepository.existsByEmail(normalized)) {
+                throw conflict("EMAIL_ALREADY_EXISTS", "Bu e-posta adresi başka bir hesap tarafından kullanılıyor.");
+            }
+            user.setEmail(normalized);
+        }
         user.setName(name);
         user.changeRole(role);
         user.changeJobTitle(jobTitle);
@@ -103,6 +127,7 @@ public class AdminUserService {
             Long userId,
             boolean active,
             String currentAdminEmail) {
+        organization.lockOrganization();
         User user = findManageableUser(userId);
         boolean currentUser = user.getEmail().equals(normalizeEmail(currentAdminEmail));
 
@@ -117,6 +142,9 @@ public class AdminUserService {
             throw conflict("LAST_ACTIVE_ADMIN", "The last active admin cannot be deactivated");
         }
 
+        if (!active && organization.hasDirectReports(userId)) {
+            throw conflict("MANAGER_HAS_REPORTS", "Önce bağlı çalışanları başka bir yöneticiye devredin.");
+        }
         if (active) {
             user.activate();
         } else {
@@ -145,18 +173,46 @@ public class AdminUserService {
 
     @Transactional
     public void deleteUser(Long userId, String currentAdminEmail) {
+        organization.lockOrganization();
         User user = lockUser(userId);
         if (user.getDeletedAt() != null) return;
         if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
             throw conflict("SELF_DELETION_NOT_ALLOWED", "You cannot delete your own account");
         }
+        if (userRepository.countOwnedChannels(userId) > 0) {
+            throw conflict("USER_OWNS_CHANNELS", "Kullanıcıyı silmeden önce sahip olduğu kanalları devretmesi veya silmesi gerekir.");
+        }
         // Deletion is distinct from temporary deactivation, while the historical
         // identity remains referenced by authored work and project ownership.
         changeStatus(userId, false, currentAdminEmail);
+        organization.removeDeletedUser(userId);
         user.deleteAccount();
         taskRepository.deleteAssigneeReferencesByUserId(userId);
         projectTeamRepository.deleteMembershipsByUserId(userId);
         projectMemberRepository.deleteByUserId(userId);
+    }
+
+    @Transactional
+    public AdminUserResponse restoreUser(Long userId, String temporaryPassword) {
+        User user = lockUser(userId);
+        if (user.getPurgedAt() != null) throw conflict("USER_PURGED", "Kalıcı silinen hesap geri yüklenemez.");
+        if (user.getDeletedAt() == null) throw conflict("USER_NOT_DELETED", "Bu hesap silinmiş değil.");
+        validatePassword(temporaryPassword);
+        user.restoreAccount(passwordEncoder.encode(temporaryPassword));
+        return AdminUserResponse.from(user);
+    }
+
+    @Transactional
+    public void purgeUser(Long userId, String currentAdminEmail) {
+        User user = lockUser(userId);
+        if (user.getEmail().equals(normalizeEmail(currentAdminEmail))) {
+            throw conflict("SELF_DELETION_NOT_ALLOWED", "Kendi hesabınızı kalıcı silemezsiniz.");
+        }
+        if (user.getPurgedAt() != null) return;
+        if (user.getDeletedAt() == null) throw conflict("USER_NOT_DELETED", "Önce hesabı Silinenler bölümüne taşıyın.");
+        profiles.findById(userId).ifPresent(profile -> profilePhotos.deleteAfterCommit(profile.getPhotoKey()));
+        userRepository.deleteProfileByUserId(userId);
+        user.purgeAccount(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
     }
 
     @Transactional(readOnly = true)

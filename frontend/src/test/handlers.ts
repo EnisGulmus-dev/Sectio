@@ -16,6 +16,14 @@ export const initialUsers = [
 ];
 
 export const handlers = [
+  http.get("*/api/v1/organization/teams", () => HttpResponse.json([])),
+  http.get("*/api/v1/organization/managers", () => HttpResponse.json([])),
+  http.get("*/api/v1/organization/reports", () => HttpResponse.json([])),
+  http.get("*/api/v1/organization/users/:id", ({ params }) => HttpResponse.json({ userId: Number(params.id), managerId: null, managerName: null, teams: [] })),
+  http.get("*/api/v1/projects/member-candidates", () => HttpResponse.json([
+    { id: 2, name: "Ada Çalışan", email: "ada@sectio.local", role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER" },
+    { id: 3, name: "Mert Lider", email: "mert@sectio.local", role: "EMPLOYEE", jobTitle: "TEAM_LEADER" },
+  ])),
   http.get("*/api/v1/projects/10/member-candidates", () => HttpResponse.json([
     { id: 2, name: "Ada Çalışan", email: "ada@sectio.local", role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER" },
     { id: 3, name: "Mert Lider", email: "mert@sectio.local", role: "EMPLOYEE", jobTitle: "TEAM_LEADER" },

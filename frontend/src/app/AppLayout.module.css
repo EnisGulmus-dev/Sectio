@@ -1,0 +1,7 @@
+.whiteMark { filter: brightness(0) invert(1); }
+.userImage { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+:global(.sidebar-user) .profileAvatar { border-radius: 50%; overflow: hidden; }
+.sidebarActions { grid-column: 1 / -1; display: flex; gap: 8px; }
+:global(.sidebar-user) .sidebarActions button { width: 38px; height: 38px; display: grid; place-items: center; padding: 0; }
+:global(.sidebar-user) .sidebarActions button span { margin: 0; font-size: 19px; }
+:global(.sidebar-collapsed) .sidebarActions { flex-direction: column; }

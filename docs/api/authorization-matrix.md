@@ -35,9 +35,15 @@ reddedilir; geri açma ve kalıcı silme ayrıca mümkündür. ADMIN dashboard g
 çalışan dashboard kendisine atanmış görev sayaçlarını kullanır.
 DELETE kullanıcı endpoint'i silme durumunu kaydeder; normal listeden çıkarır,
 üyelik/atamaları kaldırır. Oluşturduğu işler ve proje sahipliği korunur.
-Silinen hesap yalnız ADMIN'in salt okunur geçmiş listesinde bulunur; düzenleme,
-parola sıfırlama ve aktifleştirme reddedilir. E-posta rezerve kalır; geri yükleme
-ve fiziksel veri temizliği sunulmaz. Kendi hesabı ve son aktif ADMIN korunur.
+Silinen hesap yalnız ADMIN'in Silinenler listesinde bulunur; normal düzenleme,
+parola sıfırlama ve aktifleştirme reddedilir. Ayrı restore endpoint'i yeni geçici
+parolayla geri yükler, ilk girişte parola değişimi ister ve önceki oturumları
+geçersiz tutar. Eski üyelik/atamalar otomatik açılmaz, sahiplik korunur. E-posta
+kalıcı silmeye kadar rezerve kalır. ADMIN purge endpoint'i yalnız silinmiş
+hesapların ad/e-posta/parolasını anonimleştirir; iki listeden de kaldırır,
+geri yüklemeyi engeller. İş referansları korunur. Yeni hesap eski e-postayı
+kullanabilse de eski sahiplik/atamaları devralmaz. İki endpoint de CSRF ister.
+Kendi hesabı ve son aktif ADMIN korunur.
 Pasifleştirme ise geçicidir; üyelik/atamaları ve normal listedeki kaydı korur.
 Oturumlarda userId ve sessionVersion doğrulanır; yeniden aktifleştirme eski
 oturumları geri getirmez. Atanmamış filtre yalnız zaten erişilebilen projeyi kapsar.

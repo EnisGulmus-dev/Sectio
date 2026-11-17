@@ -118,6 +118,11 @@ public class ApiExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ApiErrorResponse> concurrentChange() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse("TASK_CONFLICT", "Görev başka biri tarafından güncellendi; yenileyip tekrar deneyin."));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiErrorResponse> dataConflict() {
         return ResponseEntity.status(HttpStatus.CONFLICT)

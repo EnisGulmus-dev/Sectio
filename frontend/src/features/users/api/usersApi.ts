@@ -24,7 +24,7 @@ export const usersApi = {
       body: JSON.stringify(input),
     }),
 
-  update: (id: number, input: { name: string; role: UserRole; jobTitle: JobTitle }) =>
+  update: (id: number, input: { name: string; email: string; role: UserRole; jobTitle: JobTitle; managerId?: number | null; teamIds?: number[] }) =>
     apiRequest<ManagedUser>(`${basePath}/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -44,6 +44,11 @@ export const usersApi = {
 
   deleteUser: (id: number) =>
     apiRequest<void>(`${basePath}/${id}`, { method: "DELETE" }),
+
+  restore: (id: number, temporaryPassword: string) =>
+    apiRequest<ManagedUser>(`${basePath}/${id}/restore`, { method: "POST", body: JSON.stringify({ temporaryPassword }) }),
+
+  purge: (id: number) => apiRequest<void>(`${basePath}/${id}/purge`, { method: "DELETE" }),
 
   deletionImpact: (id: number) =>
     apiRequest<UserDeletionImpact>(`${basePath}/${id}/deletion-impact`),

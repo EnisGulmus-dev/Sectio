@@ -17,6 +17,26 @@ function renderPage() {
 }
 
 describe("UsersPage", () => {
+  it("includes optional manager and multiple company teams when creating a user", async () => {
+    let input: unknown;
+    server.use(
+      http.get("*/api/v1/organization/teams", () => HttpResponse.json([{ id: 10, name: "Yazılım" }, { id: 11, name: "Test" }])),
+      http.get("*/api/v1/organization/managers", () => HttpResponse.json([{ id: 1, name: "Sectio Admin", jobTitle: "CIO" }])),
+      http.post("*/api/v1/admin/users", async ({ request }) => { input = await request.json(); return HttpResponse.json({ id: 2, name: "Yeni", email: "new@example.com", role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER", active: true, deletedAt: null, mustChangePassword: true }, { status: 201 }); }),
+    );
+    const user = userEvent.setup(); renderPage();
+    await user.click(screen.getByRole("button", { name: "Kullanıcı ekle" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Yeni kullanıcı" }));
+    await user.type(dialog.getByLabelText("Ad soyad"), "Yeni");
+    await user.type(dialog.getByLabelText("E-posta"), "new@example.com");
+    await user.type(dialog.getByLabelText(/^Geçici parola/), "temporary-123");
+    await dialog.findByRole("option", { name: "Sectio Admin" });
+    await user.selectOptions(dialog.getByLabelText("Bağlı yönetici"), "1");
+    await user.click(dialog.getByRole("checkbox", { name: "Yazılım" }));
+    await user.click(dialog.getByRole("checkbox", { name: "Test" }));
+    await user.click(dialog.getByRole("button", { name: "Kaydet" }));
+    await waitFor(() => expect(input).toEqual(expect.objectContaining({ managerId: 1, teamIds: [10, 11] })));
+  });
   it("deletes a user from the normal list while keeping history read-only", async () => {
     const employee = { id: 2, name: "Ayrılan Çalışan", email: "departing@example.com",
       role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER", active: true,
@@ -112,8 +132,9 @@ describe("UsersPage", () => {
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Pasifleştir" }));
     expect(await screen.findByText("Pasif")).toBeInTheDocument();
-    expect(screen.getByText("temporary@example.com")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aktifleştir" })).toBeEnabled();
+    const row = screen.getByText("temporary@example.com").closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByRole("button", { name: "Aktifleştir" })).toBeEnabled();
     expect(screen.getByText("1 kayıt")).toBeInTheDocument();
   });
 
@@ -174,7 +195,7 @@ describe("UsersPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Kullanıcı servisi kullanılamıyor");
   });
 
-  it("shows a popup notification for an incomplete email format", async () => {
+  it("shows an inline error for an incomplete email format", async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText("Sectio Admin");
@@ -185,7 +206,82 @@ describe("UsersPage", () => {
     await user.type(within(dialog).getByLabelText(/^Geçici parola/), "temporary-123");
     await user.click(within(dialog).getByRole("button", { name: "Kaydet" }));
 
-    expect(await screen.findByText(/Geçerli bir e-posta adresi girin/)).toBeInTheDocument();
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Geçerli bir e-posta adresi girin");
+  });
+
+  it("rejects Turkish email characters inside the create dialog", async () => {
+    let email: string | undefined;
+    server.use(http.post("*/api/v1/admin/users", async ({ request }) => {
+      email = (await request.json() as { email: string }).email;
+      return HttpResponse.json({ code: "EMAIL_ALREADY_EXISTS", message: "Bu e-posta zaten kayıtlı.", fieldErrors: {} }, { status: 409 });
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Kullanıcı ekle" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Yeni kullanıcı" }));
+    await user.type(dialog.getByLabelText("Ad soyad"), "Hüseyin Ahmer");
+    await user.type(dialog.getByLabelText("E-posta"), "hüseyin@gmail.com");
+    await user.type(dialog.getByLabelText(/^Geçici parola/), "temporary-123");
+    expect(dialog.getByLabelText("E-posta")).toBeValid();
+    await user.click(dialog.getByRole("button", { name: "Kaydet" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("Türkçe karakter kullanmayın");
+    expect(email).toBeUndefined();
+    expect(dialog.getByLabelText("Ad soyad")).toHaveValue("Hüseyin Ahmer");
+  });
+
+  it("restores deleted accounts with a new password and permanently removes another deleted account", async () => {
+    const deleted = { id: 2, name: "Ayrılan", email: "departing@example.com", role: "EMPLOYEE", jobTitle: "SOFTWARE_DEVELOPER",
+      active: false, deletedAt: "2026-11-17T00:00:00Z", mustChangePassword: false,
+      createdAt: "2026-11-16T00:00:00Z", updatedAt: "2026-11-17T00:00:00Z" };
+    let restoredPassword: string | undefined;
+    let purged = false;
+    server.use(
+      http.get("*/api/v1/admin/users", ({ request }) => HttpResponse.json(new URL(request.url).searchParams.get("deleted") === "true"
+        ? [deleted, { ...deleted, id: 3, name: "Diğer kişi", email: "other@example.com" }] : [])),
+      http.post("*/api/v1/admin/users/2/restore", async ({ request }) => {
+        restoredPassword = (await request.json() as { temporaryPassword: string }).temporaryPassword;
+        return HttpResponse.json({ ...deleted, deletedAt: null, active: true, mustChangePassword: true });
+      }),
+      http.delete("*/api/v1/admin/users/3/purge", () => { purged = true; return new HttpResponse(null, { status: 204 }); }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Silinenler" }));
+    const row = (await screen.findByText("departing@example.com")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Geri yükle" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Kullanıcıyı geri yükle" }));
+    await user.type(dialog.getByLabelText(/^Yeni geçici parola/), "new-temporary-123");
+    await user.click(dialog.getByRole("button", { name: "Geri yükle" }));
+    await waitFor(() => expect(screen.queryByText("departing@example.com")).not.toBeInTheDocument());
+    expect(restoredPassword).toBe("new-temporary-123");
+    const otherRow = screen.getByText("other@example.com").closest("tr")!;
+    await user.click(within(otherRow).getByRole("button", { name: "Kalıcı sil" }));
+    const confirmation = within(screen.getByRole("dialog", { name: "Hesap kalıcı silinsin mi?" }));
+    expect(confirmation.getByText(/anonimleştirilecek/)).toBeInTheDocument();
+    expect(purged).toBe(false);
+    await user.click(confirmation.getByRole("button", { name: "Kalıcı sil" }));
+    await waitFor(() => expect(screen.queryByText("other@example.com")).not.toBeInTheDocument());
+    expect(purged).toBe(true);
+  });
+
+  it("updates a user's email", async () => {
+    let payload: unknown;
+    server.use(http.patch("*/api/v1/admin/users/1", async ({ request }) => {
+      payload = await request.json();
+      return HttpResponse.json({ id: 1, name: "Sectio Admin", email: "new@example.com", role: "ADMIN", jobTitle: "PROJECT_MANAGER", active: true, deletedAt: null, mustChangePassword: false });
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("admin@sectio.local");
+    await user.click(screen.getByRole("button", { name: "Düzenle" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Kullanıcıyı düzenle" }));
+    const email = dialog.getByRole("textbox", { name: /E-posta/ });
+    await user.clear(email);
+    await user.type(email, "new@example.com");
+    await waitFor(() => expect(dialog.getByRole("button", { name: "Güncelle" })).toBeEnabled());
+    await user.click(dialog.getByRole("button", { name: "Güncelle" }));
+    await waitFor(() => expect(payload).toEqual(expect.objectContaining({ email: "new@example.com" })));
+    expect(await screen.findByText("new@example.com")).toBeInTheDocument();
   });
 
   it("can reveal and hide the temporary password", async () => {

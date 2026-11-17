@@ -1,0 +1,9 @@
+.picker { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.picker legend { padding: 0 6px; font-weight: 600; }
+.picker h3 { margin: 14px 0 8px; font-size: 13px; color: var(--ink); }
+.grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.option { width: 64px; height: 64px; padding: 2px; border: 2px solid var(--line); border-radius: 50%; background: var(--paper); cursor: pointer; }
+.option img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.option[aria-pressed="true"], .initials[aria-pressed="true"] { border-color: var(--accent); }
+.option:focus-visible, .initials:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.initials { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--paper); cursor: pointer; }

@@ -28,11 +28,38 @@ public class ProjectService {
     @Transactional(readOnly = true) public ProjectResponse get(Long id, String email) { return ProjectResponse.from(accessible(id, actor(email))); }
     @Transactional
     public ProjectResponse create(String email, String name, String description) {
+        return create(email, name, description, List.of());
+    }
+
+    @Transactional
+    public ProjectResponse create(String email, String name, String description, List<Long> memberIds) {
         User owner = actor(email);
+        requireProjectCreation(owner);
+        var selectedIds = memberIds == null ? Set.<Long>of() : new LinkedHashSet<>(memberIds);
+        List<User> selected = selectedIds.stream().filter(id -> !id.equals(owner.getId())).sorted()
+                .map(id -> users.findByIdForUpdate(id).orElseThrow(() -> error("USER_NOT_FOUND", "Selected user was not found", HttpStatus.NOT_FOUND)))
+                .toList();
+        if (selected.stream().anyMatch(user -> !user.isActive() || user.getDeletedAt() != null)) {
+            throw error("USER_INACTIVE", "Project members must be active users", HttpStatus.CONFLICT);
+        }
+        Project p = projects.save(new Project(owner, name, description));
+        members.save(new ProjectMember(p, owner));
+        if (!selected.isEmpty()) members.saveAll(selected.stream().map(user -> new ProjectMember(p, user)).toList());
+        return ProjectResponse.from(p);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProjectMemberCandidateResponse> creationCandidates(String email) {
+        User owner = actor(email);
+        requireProjectCreation(owner);
+        return users.findByActiveTrueOrderByNameAsc().stream().filter(user -> !user.getId().equals(owner.getId()))
+                .map(ProjectMemberCandidateResponse::from).toList();
+    }
+
+    private void requireProjectCreation(User owner) {
         if (owner.getRole() != Role.ADMIN && !owner.getJobTitle().canCreateProjects()) {
             throw error("PROJECT_CREATION_DENIED", "Only admins, team leaders and project management titles can create projects", HttpStatus.FORBIDDEN);
         }
-        Project p = projects.save(new Project(owner, name, description)); members.save(new ProjectMember(p, owner)); return ProjectResponse.from(p);
     }
     @Transactional
     public ProjectResponse update(Long id, String email, String name, String description) { User actor = actor(email); Project p = manageable(id, actor); active(p); p.update(name, description); return ProjectResponse.from(p); }

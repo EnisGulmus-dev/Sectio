@@ -61,10 +61,10 @@ public class ProjectTeamService {
     }
 
     @Transactional(readOnly = true)
-    public Set<User> resolveForTask(Project project, List<Long> teamIds) {
-        Set<User> resolved = new LinkedHashSet<>();
+    public Set<ProjectTeam> resolveTeamsForTask(Project project, List<Long> teamIds) {
+        Set<ProjectTeam> resolved = new LinkedHashSet<>();
         for (Long teamId : teamIds == null ? List.<Long>of() : teamIds) {
-            resolved.addAll(find(project.getId(), teamId).getMembers());
+            resolved.add(find(project.getId(), teamId));
         }
         return resolved;
     }

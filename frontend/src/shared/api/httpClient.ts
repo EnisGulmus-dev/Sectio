@@ -51,7 +51,7 @@ export async function apiRequest<T>(
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
 
-  if (init.body != null) {
+  if (init.body != null && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 

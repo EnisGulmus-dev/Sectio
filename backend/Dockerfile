@@ -11,6 +11,7 @@ RUN mvn -f backend/pom.xml -B -ntp package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 RUN addgroup -S sectio && adduser -S sectio -G sectio
+RUN mkdir -p /app/profile-photos && chown sectio:sectio /app/profile-photos
 COPY --from=build /workspace/backend/target/*.jar app.jar
 USER sectio
 EXPOSE 8080

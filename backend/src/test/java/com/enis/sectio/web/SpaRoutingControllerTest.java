@@ -24,4 +24,11 @@ class SpaRoutingControllerTest {
             mvc.perform(get("/brand/" + file)).andExpect(status().isNotFound());
         }
     }
+
+    @Test
+    void avatarRequestsAreNotCapturedBySpaController() throws Exception {
+        for (String file : new String[]{"erkek_01_sakalsiz.png", "kadin_01_uzun_siyah_sac.png", "missing.png"}) {
+            mvc.perform(get("/avatars/" + file)).andExpect(status().isNotFound());
+        }
+    }
 }

@@ -39,12 +39,15 @@ class AdminUserServiceTest {
     @Mock private ProjectTeamRepository projectTeamRepository;
     @Mock private com.enis.sectio.task.EndedTaskAssignmentRepository workHistory;
     @Mock private UserWorkTrackingRepository workTracking;
+    @Mock private com.enis.sectio.user.ProfileRepository profiles;
+    @Mock private com.enis.sectio.user.ProfilePhotoStore profilePhotos;
+    @Mock private com.enis.sectio.organization.OrganizationService organization;
 
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository, projectTeamRepository, workHistory, workTracking);
+        service = new AdminUserService(userRepository, passwordEncoder, projectRepository, projectMemberRepository, taskRepository, projectTeamRepository, workHistory, workTracking, profiles, profilePhotos, organization);
     }
 
     @Test
@@ -212,6 +215,79 @@ class AdminUserServiceTest {
         service.deleteUser(2L, "admin@sectio.local");
         assertThat(employee.getDeletedAt()).isEqualTo(deletedAt);
         org.mockito.Mockito.verifyNoInteractions(taskRepository, projectMemberRepository, projectTeamRepository);
+    }
+
+    @Test
+    void restoreRequiresDeletedAccountAndNewPasswordAndRevokesOldSessions() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        employee.deleteAccount();
+        long version = employee.getSessionVersion();
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        when(passwordEncoder.encode("new-temporary-123")).thenReturn("new-hash");
+        var restored = service.restoreUser(2L, "new-temporary-123");
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.deletedAt()).isNull();
+        assertThat(restored.mustChangePassword()).isTrue();
+        assertThat(employee.getSessionVersion()).isGreaterThan(version);
+        assertThat(employee.getPasswordHash()).isEqualTo("new-hash");
+        org.mockito.Mockito.verifyNoInteractions(projectMemberRepository, taskRepository, projectTeamRepository);
+        assertThatThrownBy(() -> service.restoreUser(2L, "new-temporary-123")).isInstanceOf(UserManagementException.class);
+    }
+
+    @Test
+    void purgeAnonymizesOnlyDeletedAccountsAndPreventsRestore() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        assertThatThrownBy(() -> service.purgeUser(2L, "admin@example.com")).isInstanceOf(UserManagementException.class);
+        employee.deleteAccount();
+        when(passwordEncoder.encode(org.mockito.ArgumentMatchers.anyString())).thenReturn("unusable-hash");
+        service.purgeUser(2L, "admin@example.com");
+        assertThat(employee.getPurgedAt()).isNotNull();
+        assertThat(employee.isActive()).isFalse();
+        assertThat(employee.getEmail()).endsWith("@deleted.invalid").isNotEqualTo("former@example.com");
+        assertThat(employee.getName()).doesNotContain("Former");
+        assertThatThrownBy(() -> service.restoreUser(2L, "new-temporary-123")).isInstanceOf(UserManagementException.class);
+        service.purgeUser(2L, "admin@example.com"); // Idempotent, no historical work removal.
+        org.mockito.Mockito.verifyNoInteractions(projectRepository, projectMemberRepository, taskRepository, projectTeamRepository, workHistory);
+    }
+
+    @Test
+    void purgeSchedulesStoredProfilePhotoForRemoval() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        employee.deleteAccount();
+        var profile = new com.enis.sectio.user.Profile(2L);
+        profile.setPhotoKey("12345678-1234-1234-1234-123456789abc.png");
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        when(profiles.findById(2L)).thenReturn(Optional.of(profile));
+        when(passwordEncoder.encode(org.mockito.ArgumentMatchers.anyString())).thenReturn("unusable-hash");
+        service.purgeUser(2L, "admin@example.com");
+        verify(profilePhotos).deleteAfterCommit(profile.getPhotoKey());
+        verify(userRepository).deleteProfileByUserId(2L);
+    }
+
+    @Test
+    void reusedEmailOfDeletedAccountExplainsRestoreOption() {
+        User employee = user("Former", "former@example.com", Role.EMPLOYEE);
+        employee.deleteAccount();
+        when(userRepository.existsByEmail(employee.getEmail())).thenReturn(true);
+        when(userRepository.findByEmail(employee.getEmail())).thenReturn(Optional.of(employee));
+        assertThatThrownBy(() -> service.createUser("Another", employee.getEmail(), "temporary-123", Role.EMPLOYEE, JobTitle.SOFTWARE_DEVELOPER))
+                .isInstanceOf(UserManagementException.class).hasMessageContaining("Silinenler");
+        verify(userRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void changingEmailRevokesSessionsAndRejectsDuplicateAddresses() {
+        User employee = user("Employee", "old@example.com", Role.EMPLOYEE);
+        when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(employee));
+        when(userRepository.existsByEmail("taken@example.com")).thenReturn(true);
+        assertThatThrownBy(() -> service.updateUser(2L, "Employee", "taken@example.com", Role.EMPLOYEE, JobTitle.SOFTWARE_DEVELOPER, "admin@example.com"))
+                .isInstanceOf(UserManagementException.class);
+        assertThat(employee.getEmail()).isEqualTo("old@example.com");
+        long previous = employee.getSessionVersion();
+        service.updateUser(2L, "Employee", "NEW@example.com", Role.EMPLOYEE, JobTitle.SOFTWARE_DEVELOPER, "admin@example.com");
+        assertThat(employee.getEmail()).isEqualTo("new@example.com");
+        assertThat(employee.getSessionVersion()).isGreaterThan(previous);
     }
 
     private static User user(String name, String email, Role role) {
